@@ -1,0 +1,3811 @@
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\App.jsx ====================
+
+import { useState, useCallback, useMemo } from 'react'
+import Header from './components/layout/Header'
+import Sidebar from './components/layout/Sidebar'
+import BusinessGraph from './components/twin/BusinessGraph'
+import InsightPanel from './components/intelligence/InsightPanel'
+import AskNexus from './components/intelligence/AskNexus'
+import { useBusinessGraph } from './hooks/useBusinessGraph'
+
+export default function App() {
+  const graph = useBusinessGraph()
+  const [query, setQuery] = useState('')
+  const [activeScenario, setActiveScenario] = useState(null)
+
+  const handleScenarioSelect = useCallback(
+    (scenario) => {
+      setQuery(scenario.query)
+      setActiveScenario(scenario)
+      graph.applyScenarioHighlight(scenario.affectedNodeIds, scenario.focusNodeId)
+    },
+    [graph]
+  )
+
+  const handleClearScenario = useCallback(() => {
+    setActiveScenario(null)
+    setQuery('')
+    graph.clearScenarioHighlight()
+    graph.clearSelection()
+  }, [graph])
+
+  // Clicking a node directly (focus mode) always supersedes an active
+  // scenario preview, so the Intelligence panel and graph never show two
+  // contradictory stories at once.
+  const handleSelectNode = useCallback(
+    (nodeId) => {
+      setActiveScenario(null)
+      setQuery('')
+      graph.selectNode(nodeId)
+    },
+    [graph]
+  )
+
+  // "View dependency" in the Hidden Dependency insight focuses the graph
+  // on Product X without going through the scenario/simulation flow.
+  const handleViewDependency = useCallback(
+    (nodeId) => {
+      graph.clearScenarioHighlight()
+      graph.selectNode(nodeId)
+    },
+    [graph]
+  )
+
+  // BusinessGraph reads `selectNode` off this object directly, so routing
+  // it through the wrapper above keeps App.jsx's scenario state in sync
+  // without changing the hook's public shape for other consumers.
+  const graphForTwin = useMemo(() => ({ ...graph, selectNode: handleSelectNode }), [graph, handleSelectNode])
+
+  return (
+    <div className="app-shell">
+      <Header />
+      <main className="app-main">
+        <Sidebar />
+        <BusinessGraph graph={graphForTwin} />
+        <InsightPanel
+          activeScenario={activeScenario}
+          selectedNode={graph.selectedNode}
+          onViewDependency={handleViewDependency}
+          onClearScenario={handleClearScenario}
+        />
+      </main>
+      <AskNexus
+        query={query}
+        onQueryChange={setQuery}
+        onScenarioSelect={handleScenarioSelect}
+        activeScenarioId={activeScenario?.id}
+      />
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\index.css ====================
+
+/* ============================================================
+   NEXUS DESIGN SYSTEM
+   Cinematic, elegant, premium AI product surface.
+   ============================================================ */
+
+:root {
+  /* Surfaces — warm graphite, not slate/blue-black */
+  --bg-base: #0b0d0c;
+  --bg-secondary: #121614;
+  --bg-elevated: #181d1a;
+  --bg-elevated-hover: #1e2420;
+  --surface-soft: #202622;
+  --border-subtle: rgba(232, 230, 223, 0.07);
+  --border-soft: rgba(232, 230, 223, 0.14);
+
+  /* Signature accent — active / live / selected states ONLY */
+  --accent-lime: #c6ff3b;
+  --accent-lime-soft: rgba(198, 255, 59, 0.14);
+
+  /* Intelligence — anything NEXUS's AI itself is surfacing */
+  --accent-primary: #8b7cff;
+  --accent-primary-soft: rgba(139, 124, 255, 0.14);
+
+  /* Status */
+  --status-healthy: #62c98b;
+  --status-healthy-soft: rgba(98, 201, 139, 0.14);
+  --status-warning: #ffb347;
+  --status-warning-soft: rgba(255, 179, 71, 0.14);
+  --status-critical: #ff5c4d;
+  --status-critical-soft: rgba(255, 92, 77, 0.14);
+
+  /* Text — warm bone, not cool slate */
+  --text-primary: #e8e6df;
+  --text-secondary: #8e9690;
+  --text-tertiary: #5f6861;
+
+  /* Type */
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+
+  /* Radii */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+
+  /* Shadows */
+  --shadow-elevated: 0 20px 50px -20px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+  --shadow-soft: 0 10px 30px -18px rgba(0, 0, 0, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: radial-gradient(ellipse 120% 80% at 50% -10%, #14170f 0%, var(--bg-base) 55%);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
+
+::selection {
+  background: var(--accent-primary-soft);
+  color: var(--text-primary);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mono-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   APP SHELL
+   ============================================================ */
+
+.app-shell {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.app-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(600px 300px at 15% 0%, rgba(139, 124, 255, 0.06), transparent 60%),
+    radial-gradient(500px 260px at 85% 10%, rgba(198, 255, 59, 0.03), transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 17.5% 1fr 21%;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+  padding: 0 20px 12px;
+  gap: 18px;
+}
+
+@media (max-width: 1100px) {
+  .app-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    overflow-y: auto;
+  }
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px 14px;
+  position: relative;
+  z-index: 2;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.brand-mark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-healthy);
+  box-shadow: 0 0 0 3px var(--status-healthy-soft);
+  animation: pulse-dot 2.6s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 3px var(--status-healthy-soft); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 6px transparent; }
+}
+
+.brand-subtitle {
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-soft);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.header-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.header-stat-label {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-stat-value {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 100px;
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-lime);
+  box-shadow: 0 0 0 3px var(--accent-lime-soft);
+  animation: pulse-dot 2.6s ease-in-out infinite;
+}
+
+.live-badge-text {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+}
+
+.header-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border-subtle);
+}
+
+/* Digital Twin panel header — entity/health stats folded in as quiet meta,
+   not a second dashboard stat block */
+.twin-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.twin-meta-divider {
+  width: 1px;
+  height: 11px;
+  background: var(--border-soft);
+}
+
+.twin-meta-stat {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+/* ============================================================
+   PANEL / CARD PRIMITIVES
+   ============================================================ */
+
+/* Default panel is a "floating module" — no card chrome. Used by the
+   Business Signals rail and the Intelligence panel, which read as
+   contextual information living in whitespace beside the graph, not
+   as boxed dashboard widgets competing with it. */
+.panel {
+  background: none;
+  border: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rail-left {
+  border-right: 1px solid var(--border-subtle);
+  padding-right: 6px;
+}
+
+.rail-right {
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 6px;
+}
+
+.panel-header {
+  padding: 16px 6px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--border-soft);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 100px;
+}
+
+.badge-healthy { background: var(--status-healthy-soft); color: var(--status-healthy); }
+.badge-warning { background: var(--status-warning-soft); color: var(--status-warning); }
+.badge-critical { background: var(--status-critical-soft); color: var(--status-critical); }
+.badge-neutral { background: rgba(148, 163, 184, 0.12); color: var(--text-secondary); }
+
+.metric-value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.metric-delta {
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.metric-delta.up { color: var(--status-healthy); }
+.metric-delta.down { color: var(--status-critical); }
+
+/* ============================================================
+   LEFT RAIL — BUSINESS SIGNALS
+   ============================================================ */
+
+.signal-rail {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 16px 12px;
+}
+
+/* Primary signal — Revenue. Borderless, typography-led, visually the
+   "hero" of the rail rather than one card among four identical ones. */
+.signal-hero {
+  padding-bottom: 18px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Secondary signals — a quiet editorial list, separated by hairlines
+   instead of repeated card chrome. */
+.signal-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.signal-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 2px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.signal-list-item:last-child {
+  border-bottom: none;
+}
+
+.signal-list-caption {
+  display: block;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-weight: 400;
+  margin-top: 2px;
+  max-width: 150px;
+  line-height: 1.35;
+}
+
+.signal-card {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: default;
+}
+
+.signal-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.signal-icon-wrap {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.signal-label {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.signal-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.signal-value {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.signal-caption {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* ============================================================
+   DIGITAL TWIN GRAPH
+   ============================================================ */
+
+.twin-panel {
+  position: relative;
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, rgba(18, 22, 20, 0.7) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-elevated);
+}
+
+.twin-panel .panel-header {
+  padding: 16px 20px 12px;
+}
+
+.twin-canvas-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+
+.twin-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.twin-legend {
+  position: absolute;
+  bottom: 14px;
+  left: 16px;
+  display: flex;
+  gap: 14px;
+  padding: 8px 12px;
+  background: rgba(13, 17, 26, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: 100px;
+  backdrop-filter: blur(8px);
+  z-index: 3;
+}
+
+/* Breadcrumb — appears only in focus mode, replacing the old permanent
+   inspector card with a single quiet line of "where am I" context. */
+.graph-breadcrumb {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 6px;
+  background: rgba(13, 17, 26, 0.75);
+  border: 1px solid var(--border-subtle);
+  border-radius: 100px;
+  backdrop-filter: blur(10px);
+  animation: panel-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.breadcrumb-back {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: none;
+  color: var(--text-secondary);
+}
+
+.breadcrumb-back:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated-hover);
+}
+
+.breadcrumb-crumb {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.breadcrumb-crumb.muted {
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.breadcrumb-chevron {
+  color: var(--text-tertiary);
+}
+
+/* Territories — faint organic spatial grouping, embedded in the
+   environment rather than presented as dashboard section headers. */
+.territory {
+  pointer-events: none;
+}
+
+.territory-label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  fill: var(--text-tertiary);
+  opacity: 0.5;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* Floating insight overlay — short discovered-fact annotations near a
+   focused node. Text only, no background chrome, so it reads as an
+   intelligence overlay rather than a card. */
+.overlay-line-primary {
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--text-primary);
+  text-anchor: middle;
+}
+
+.overlay-line {
+  font-size: 11px;
+  font-weight: 400;
+  fill: var(--text-secondary);
+  text-anchor: middle;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+
+.legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+/* Graph node */
+.graph-node {
+  cursor: pointer;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Ambient organic drift — a slow, independent, per-node micro-wander.
+   Applied on the inner group so it composes with (rather than fights)
+   the outer group's absolute position + interaction offset. */
+@keyframes node-drift {
+  0%   { transform: translate(0px, 0px); }
+  25%  { transform: translate(1.6px, -2px); }
+  50%  { transform: translate(-1.4px, 1.2px); }
+  75%  { transform: translate(1.8px, 1.6px); }
+  100% { transform: translate(0px, 0px); }
+}
+
+.node-drift {
+  animation: node-drift var(--drift-dur, 10s) ease-in-out infinite;
+  animation-delay: var(--drift-delay, 0s);
+}
+
+.graph-node-halo {
+  transition: opacity 0.3s ease, r 0.3s ease;
+}
+
+.graph-node-ring {
+  transition: stroke-width 0.2s ease, stroke 0.2s ease;
+}
+
+.graph-node-body {
+  transition: filter 0.2s ease;
+}
+
+.graph-node-icon-wrap {
+  pointer-events: none;
+}
+
+.graph-node.dimmed {
+  opacity: 0.28;
+}
+
+.graph-node text {
+  font-family: var(--font-ui);
+  pointer-events: none;
+  user-select: none;
+}
+
+.node-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--text-primary);
+}
+
+.node-sublabel {
+  font-size: 9.5px;
+  fill: var(--text-tertiary);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.12); opacity: 0.9; }
+}
+
+.breathing {
+  animation: breathe 3.2s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Edges */
+.dep-edge {
+  fill: none;
+  transition: stroke-opacity 0.3s ease, stroke-width 0.3s ease;
+}
+
+.dep-edge.dimmed {
+  stroke-opacity: 0.08 !important;
+}
+
+.dep-edge.highlighted {
+  stroke-width: 2.4;
+}
+
+.flow-particle {
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+/* Graph controls */
+.graph-controls {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+
+.graph-control-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  background: rgba(13, 17, 26, 0.75);
+  border: 1px solid var(--border-subtle);
+  border-radius: 100px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  backdrop-filter: blur(8px);
+  transition: all 0.18s ease;
+}
+
+.graph-control-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-soft);
+  background: var(--bg-elevated-hover);
+}
+
+.graph-control-btn.active {
+  color: var(--accent-lime);
+  border-color: rgba(198, 255, 59, 0.4);
+  background: var(--accent-lime-soft);
+}
+
+/* Shared "quick panel" entrance, used by the focus breadcrumb */
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Constellation — small metric/drilldown satellites orbiting a focused
+   node. Replaces the old rectangular inspector card entirely. */
+.constellation-satellite {
+  opacity: 0;
+  animation: satellite-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes satellite-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.constellation-value {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  fill: var(--text-primary);
+}
+
+.constellation-label {
+  font-size: 8.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  fill: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.constellation-drill-label {
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--text-secondary);
+}
+
+.constellation-drill-sublabel {
+  font-size: 9px;
+  fill: var(--text-tertiary);
+}
+
+/* Cascade impact pulse — one-shot expanding ring, not looping, so a
+   scenario's step-by-step reveal reads as discrete legible beats. */
+@keyframes cascade-pulse {
+  0% { r: var(--pulse-r0, 30); stroke-opacity: 0.9; }
+  100% { r: calc(var(--pulse-r0, 30) + 22); stroke-opacity: 0; }
+}
+
+.cascade-pulse-ring {
+  animation: cascade-pulse 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+/* ============================================================
+   RIGHT PANEL — NEXUS INTELLIGENCE
+   ============================================================ */
+
+.intel-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.intel-brain-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 2px 4px;
+}
+
+.intel-brain-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent-primary), #4a3fd6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px -4px rgba(139, 124, 255, 0.45);
+  flex-shrink: 0;
+}
+
+.intel-brain-title {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.intel-brain-subtitle {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+.insight-block {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.insight-block::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--accent-primary), var(--accent-lime));
+}
+
+.insight-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  margin-bottom: 8px;
+}
+
+.insight-text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.insight-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.insight-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  background: rgba(0,0,0,0.18);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.insight-path-node {
+  padding: 3px 8px;
+  background: var(--bg-elevated-hover);
+  border-radius: 100px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 10.5px;
+}
+
+.insight-btn {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-primary);
+  background: none;
+  border: none;
+  padding: 0;
+  transition: gap 0.15s ease;
+}
+
+.insight-btn:hover {
+  gap: 9px;
+}
+
+/* Cascade risk */
+.risk-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.risk-score {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.risk-score-max {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.risk-bar-track {
+  height: 6px;
+  border-radius: 100px;
+  background: rgba(148, 163, 184, 0.12);
+  margin: 10px 0 8px;
+  overflow: hidden;
+}
+
+.risk-bar-fill {
+  height: 100%;
+  border-radius: 100px;
+  background: linear-gradient(90deg, var(--status-warning), var(--status-critical));
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cascade-flow {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+}
+
+.cascade-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  position: relative;
+}
+
+.cascade-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 20px;
+  width: 1px;
+  height: calc(100% - 6px);
+  background: var(--border-soft);
+}
+
+.cascade-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+  z-index: 1;
+  background: var(--bg-elevated);
+  border: 2px solid var(--text-tertiary);
+}
+
+.cascade-dot.final {
+  border-color: var(--status-critical);
+  background: var(--status-critical);
+}
+
+.cascade-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  padding-top: 1px;
+}
+
+.cascade-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ============================================================
+   ASK NEXUS COMMAND BAR
+   ============================================================ */
+
+.command-zone {
+  padding: 4px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  z-index: 2;
+}
+
+.scenario-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-left: 4px;
+}
+
+.scenario-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 100px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: all 0.18s ease;
+}
+
+.scenario-chip:hover {
+  border-color: rgba(139, 124, 255, 0.32);
+  color: var(--text-primary);
+  background: var(--accent-primary-soft);
+  transform: translateY(-1px);
+}
+
+.scenario-chip.active {
+  border-color: rgba(198, 255, 59, 0.4);
+  color: var(--text-primary);
+  background: var(--accent-lime-soft);
+}
+
+.scenario-chip svg {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.scenario-chip.active svg {
+  color: var(--accent-lime);
+}
+
+.command-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-xl);
+  padding: 6px 8px 6px 20px;
+  box-shadow: var(--shadow-soft);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.command-bar:focus-within {
+  border-color: rgba(198, 255, 59, 0.4);
+  box-shadow: 0 0 0 3px var(--accent-lime-soft), var(--shadow-soft);
+  background: var(--surface-soft);
+}
+
+.command-bar-icon {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+.command-bar:focus-within .command-bar-icon {
+  color: var(--accent-lime);
+}
+
+.command-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 14.5px;
+  padding: 10px 0;
+}
+
+.command-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.command-submit {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, var(--accent-lime), #a8e02c);
+  border: none;
+  border-radius: var(--r-lg);
+  color: #0b0d0c;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 14px -4px rgba(198, 255, 59, 0.4);
+}
+
+.command-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -4px rgba(198, 255, 59, 0.55);
+}
+
+.command-submit:active {
+  transform: translateY(0);
+}
+
+/* ============================================================
+   UTILITY
+   ============================================================ */
+
+.flex-row { display: flex; align-items: center; }
+.gap-6 { gap: 6px; }
+.gap-8 { gap: 8px; }
+
+.empty-inspector-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  padding: 0 20px;
+}
+
+/* ============================================================
+   REDUCED MOTION
+   Ambient/ornamental animation is switched off outright, not just
+   slowed. Functional transitions (hover states, inspector open) stay,
+   since they communicate state rather than decorate.
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .breathing,
+  .node-drift,
+  .status-dot,
+  .live-dot {
+    animation: none !important;
+  }
+  .graph-node {
+    transition: none;
+  }
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\main.jsx ====================
+
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\dashboard\BusinessSignals.jsx ====================
+
+import { IndianRupee, ShieldCheck, PackageSearch, Users } from 'lucide-react'
+import SignalCard from './SignalCard'
+import { businessMetrics } from '../../data/businessData'
+
+export default function BusinessSignals() {
+  const { revenue, paymentHealth, inventoryRisk, customerExposure } = businessMetrics
+
+  return (
+    <div className="signal-rail">
+      <SignalCard
+        variant="hero"
+        icon={IndianRupee}
+        accent="#c6ff3b"
+        label="Revenue"
+        value={revenue.value}
+        delta={revenue.delta}
+        caption={revenue.caption}
+      />
+
+      <div className="signal-list">
+        <SignalCard
+          icon={ShieldCheck}
+          accent="#8b7cff"
+          label="Payment Health"
+          value={paymentHealth.value}
+          caption={paymentHealth.caption}
+        />
+        <SignalCard
+          icon={PackageSearch}
+          accent="#ffb347"
+          label="Inventory Risk"
+          value={inventoryRisk.value}
+          caption={inventoryRisk.caption}
+        />
+        <SignalCard
+          icon={Users}
+          accent="#ff5c4d"
+          label="Customer Exposure"
+          value={customerExposure.value}
+          caption={customerExposure.caption}
+        />
+      </div>
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\dashboard\RiskPanel.jsx ====================
+
+import { cascadeRisk } from '../../data/businessData'
+
+/**
+ * Cascade risk score + animated propagation pathway. Reusable — the main
+ * ecosystem-level risk lives in the Intelligence panel, but this component
+ * can also render a scenario-specific risk score when a simulation preview
+ * is active (see SimulationResult.jsx).
+ */
+export default function RiskPanel({ score = cascadeRisk.score, label = cascadeRisk.label, steps = cascadeRisk.steps }) {
+  const pct = (score / cascadeRisk.max) * 100
+
+  return (
+    <div className="insight-block" style={{ marginTop: 0 }}>
+      <div className="insight-eyebrow">Cascade Risk</div>
+      <div className="risk-header-row">
+        <span className="risk-score">
+          {score}
+          <span className="risk-score-max"> / {cascadeRisk.max}</span>
+        </span>
+      </div>
+      <div className="risk-bar-track">
+        <div className="risk-bar-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="signal-caption" style={{ marginTop: 0 }}>{label}</p>
+
+      <div className="cascade-flow">
+        {steps.map((step, i) => (
+          <div className="cascade-step" key={i}>
+            <span className={`cascade-dot ${step.emphasis ? 'final' : ''}`} />
+            <span className="cascade-text">
+              {step.emphasis ? <strong>{step.text}</strong> : step.text}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\dashboard\ScenarioCards.jsx ====================
+
+import { Sparkles } from 'lucide-react'
+import { scenarios } from '../../data/scenarios'
+
+/**
+ * Suggestion chips beneath the Ask NEXUS command bar. Clicking a chip
+ * populates the query and triggers a controlled mock scenario preview
+ * (see App.jsx `handleScenarioSelect`) rather than a real simulation.
+ */
+export default function ScenarioCards({ onSelect, activeScenarioId }) {
+  return (
+    <div className="scenario-chips">
+      {scenarios.map((s) => (
+        <button
+          key={s.id}
+          className={`scenario-chip ${activeScenarioId === s.id ? 'active' : ''}`}
+          onClick={() => onSelect(s)}
+        >
+          <Sparkles size={12} />
+          {s.prompt}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\dashboard\SignalCard.jsx ====================
+
+import { ArrowUpRight } from 'lucide-react'
+
+/**
+ * `variant="hero"` — one primary signal (Revenue) rendered large, borderless,
+ * typography-led. `variant="compact"` (default) — a borderless list row for
+ * secondary signals, separated by a hairline rather than individual card
+ * chrome, so the rail reads as an editorial module, not four repeated cards.
+ */
+export default function SignalCard({ icon: Icon, accent, label, value, caption, delta, variant = 'compact' }) {
+  if (variant === 'hero') {
+    return (
+      <div className="signal-hero">
+        <span className="signal-label">
+          <span className="signal-icon-wrap" style={{ background: `${accent}20`, color: accent }}>
+            <Icon size={14} />
+          </span>
+          {label}
+        </span>
+        <div className="signal-value-row" style={{ marginTop: 8 }}>
+          <span className="signal-value" style={{ fontSize: 34 }}>
+            {value}
+          </span>
+          {typeof delta === 'number' && (
+            <span className={`metric-delta ${delta >= 0 ? 'up' : 'down'}`}>
+              <ArrowUpRight size={12} style={{ transform: delta < 0 ? 'rotate(90deg)' : 'none' }} />
+              {Math.abs(delta)}%
+            </span>
+          )}
+        </div>
+        {caption && <p className="signal-caption">{caption}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="signal-list-item">
+      <span className="signal-label">
+        <span className="signal-icon-wrap" style={{ background: `${accent}1f`, color: accent }}>
+          <Icon size={13} />
+        </span>
+        <span>
+          {label}
+          {caption && <span className="signal-list-caption">{caption}</span>}
+        </span>
+      </span>
+      <span className="signal-value" style={{ fontSize: 17 }}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\intelligence\AskNexus.jsx ====================
+
+import { useState } from 'react'
+import { Sparkles, ArrowRight } from 'lucide-react'
+import ScenarioCards from '../dashboard/ScenarioCards'
+import { scenarios } from '../../data/scenarios'
+
+/**
+ * Phase 1 Ask NEXUS bar. Scenario chips drive a controlled mock cascade
+ * preview (see App.jsx). Free-text input that doesn't match a known
+ * scenario is handled honestly — no fake AI response — since natural
+ * language interpretation is a Phase 5 capability (see aiService.js).
+ */
+export default function AskNexus({ query, onQueryChange, onScenarioSelect, activeScenarioId }) {
+  const [unmatched, setUnmatched] = useState(false)
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const match = scenarios.find((s) => s.query.toLowerCase() === query.trim().toLowerCase())
+    if (match) {
+      setUnmatched(false)
+      onScenarioSelect(match)
+    } else if (query.trim().length > 0) {
+      setUnmatched(true)
+    }
+  }
+
+  function handleChipSelect(scenario) {
+    setUnmatched(false)
+    onScenarioSelect(scenario)
+  }
+
+  return (
+    <div className="command-zone">
+      <ScenarioCards onSelect={handleChipSelect} activeScenarioId={activeScenarioId} />
+
+      <form className="command-bar" onSubmit={handleSubmit}>
+        <Sparkles size={17} className="command-bar-icon" />
+        <input
+          className="command-input"
+          placeholder="What would you like to stress-test?"
+          value={query}
+          onChange={(e) => {
+            onQueryChange(e.target.value)
+            if (unmatched) setUnmatched(false)
+          }}
+        />
+        <button type="submit" className="command-submit">
+          Ask
+          <ArrowRight size={14} />
+        </button>
+      </form>
+
+      {unmatched && (
+        <p className="signal-caption" style={{ paddingLeft: 4 }}>
+          NEXUS understands guided scenarios in this preview — try one of the suggestions above. Free-form
+          reasoning arrives in a later phase.
+        </p>
+      )}
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\intelligence\HiddenDependency.jsx ====================
+
+import { Eye, AlertCircle } from 'lucide-react'
+import { hiddenDependency } from '../../data/businessData'
+
+export default function HiddenDependency({ onView }) {
+  return (
+    <div className="insight-block">
+      <div className="insight-eyebrow">
+        <AlertCircle size={12} />
+        {hiddenDependency.title}
+      </div>
+      <p className="insight-text">
+        <strong>Product X</strong> generates only <strong>8%</strong> of direct revenue but influences{' '}
+        <strong>31%</strong> of downstream revenue.
+      </p>
+
+      <div className="insight-path">
+        {hiddenDependency.path.map((label, i) => (
+          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="insight-path-node">{label}</span>
+            {i < hiddenDependency.path.length - 1 && <span style={{ color: 'var(--text-tertiary)' }}>→</span>}
+          </span>
+        ))}
+      </div>
+
+      <button className="insight-btn" onClick={() => onView(hiddenDependency.nodeId)}>
+        <Eye size={13} />
+        View dependency
+      </button>
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\intelligence\InsightPanel.jsx ====================
+
+import { BrainCircuit } from 'lucide-react'
+import HiddenDependency from './HiddenDependency'
+import SimulationResult from './SimulationResult'
+import NodeObservation from './NodeObservation'
+import RiskPanel from '../dashboard/RiskPanel'
+
+export default function InsightPanel({ activeScenario, selectedNode, onViewDependency, onClearScenario }) {
+  return (
+    <section className="panel rail-right">
+      <div className="panel-header">
+        <span className="panel-title">
+          <BrainCircuit size={13} />
+          Intelligence
+        </span>
+      </div>
+
+      <div className="panel-body">
+        <div className="intel-body">
+          <div className="intel-brain-header">
+            <div className="intel-brain-icon">
+              <BrainCircuit size={17} color="#fff" />
+            </div>
+            <div>
+              <div className="intel-brain-title">NEXUS AI</div>
+              <div className="intel-brain-subtitle">Understanding your business ecosystem</div>
+            </div>
+          </div>
+
+          {activeScenario ? (
+            <SimulationResult scenario={activeScenario} onClear={onClearScenario} />
+          ) : selectedNode ? (
+            <NodeObservation node={selectedNode} />
+          ) : (
+            <HiddenDependency onView={onViewDependency} />
+          )}
+
+          <RiskPanel />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\intelligence\NodeObservation.jsx ====================
+
+import { Sparkles } from 'lucide-react'
+
+/**
+ * Replaces what used to live inside the rectangular NodeInspector card.
+ * One concise narrative sentence per selected node (from businessData's
+ * `insight` field) plus a lightweight confidence read — not a metrics
+ * dump, since those now live in the graph itself as NodeConstellation
+ * satellites.
+ */
+export default function NodeObservation({ node }) {
+  const confidence = node.health === 'healthy' ? 'Medium' : 'High'
+
+  return (
+    <div className="insight-block">
+      <div className="insight-eyebrow">
+        <Sparkles size={12} />
+        NEXUS Observation — {node.label}
+      </div>
+      <p className="insight-text">{node.insight}</p>
+      <div className="insight-path" style={{ justifyContent: 'flex-start' }}>
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-tertiary)' }}>
+          Confidence: <span style={{ color: 'var(--accent-primary)' }}>{confidence}</span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\intelligence\SimulationResult.jsx ====================
+
+import { Zap, X } from 'lucide-react'
+
+const CONFIDENCE_LABEL = {
+  high: { text: 'High Confidence', color: 'var(--status-healthy)' },
+  medium: { text: 'Medium Confidence', color: 'var(--status-warning)' },
+  low: { text: 'Low Confidence', color: 'var(--status-critical)' },
+}
+
+/**
+ * Controlled mock scenario preview — Phase 1 does not run a real simulation.
+ * Content comes directly from the matched scenario's `preview` field in
+ * src/data/scenarios.js. The Phase 2 simulation engine replaces this with
+ * a computed cascading impact timeline.
+ */
+export default function SimulationResult({ scenario, onClear }) {
+  if (!scenario) return null
+  const { preview } = scenario
+  const confidence = CONFIDENCE_LABEL[preview.confidence] || CONFIDENCE_LABEL.medium
+
+  return (
+    <div className="insight-block">
+      <div className="insight-eyebrow" style={{ justifyContent: 'space-between', display: 'flex' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Zap size={12} />
+          Simulation Preview
+        </span>
+        <button
+          onClick={onClear}
+          style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', display: 'flex' }}
+          aria-label="Clear simulation preview"
+        >
+          <X size={13} />
+        </button>
+      </div>
+
+      <p className="insight-text">
+        <strong>{preview.headline}</strong>
+      </p>
+      <p className="insight-text" style={{ color: 'var(--text-secondary)', marginTop: 6 }}>
+        {preview.body}
+      </p>
+
+      <div className="insight-path" style={{ justifyContent: 'space-between' }}>
+        <span className="insight-path-node" style={{ background: 'var(--status-critical-soft)', color: 'var(--status-critical)' }}>
+          {preview.impact}
+        </span>
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: confidence.color }}>{confidence.text}</span>
+      </div>
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\layout\Header.jsx ====================
+
+export default function Header() {
+  return (
+    <header className="header">
+      <div className="header-left">
+        <div className="brand">
+          <span className="brand-mark">
+            <span className="status-dot" />
+            NEXUS
+          </span>
+          <span className="brand-subtitle">Business Dependency Intelligence</span>
+        </div>
+      </div>
+
+      <div className="header-right">
+        <div className="live-badge">
+          <span className="live-dot" />
+          <span className="live-badge-text">Digital Twin Live</span>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\layout\Sidebar.jsx ====================
+
+import { Activity } from 'lucide-react'
+import BusinessSignals from '../dashboard/BusinessSignals'
+
+export default function Sidebar() {
+  return (
+    <section className="panel rail-left">
+      <div className="panel-header">
+        <span className="panel-title">
+          <Activity size={13} />
+          Business Signals
+        </span>
+      </div>
+      <div className="panel-body">
+        <BusinessSignals />
+      </div>
+    </section>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\twin\BusinessGraph.jsx ====================
+
+import { useMemo, useRef } from 'react'
+import { GitCommit } from 'lucide-react'
+import BusinessNode from './BusinessNode'
+import DependencyEdge from './DependencyEdge'
+import GraphControls from './GraphControls'
+import GraphBreadcrumb from './GraphBreadcrumb'
+import GraphTerritory from './GraphTerritory'
+import GraphInsightOverlay from './GraphInsightOverlay'
+import { findNodeById, getNeighborhood } from '../../utils/graphUtils'
+import { useCursorProximity } from '../../hooks/useCursorProximity'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
+import { useGraphFocus } from '../../hooks/useGraphFocus'
+import { businessMetrics, clusters } from '../../data/businessData'
+
+const VIEW_W = 1000
+const VIEW_H = 560
+const HOVER_PUSH = 9 // px a direct neighbor nudges away from a hovered node, to read as "branching open"
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v))
+}
+
+export default function BusinessGraph({ graph }) {
+  const {
+    nodes,
+    edges,
+    hoveredNodeId,
+    setHoveredNodeId,
+    selectedNode,
+    selectedNodeId,
+    selectNode,
+    clearSelection,
+    highlightMode,
+    toggleHighlightMode,
+    isNodeDimmed,
+    isEdgeDimmed,
+    isEdgeHighlighted,
+    resetView,
+    signalFilterActive,
+    toggleSignalFilter,
+    cascadeActiveNodeIds,
+    cascadeActiveEdgeIds,
+  } = graph
+
+  const svgRef = useRef(null)
+  const reducedMotion = useReducedMotion()
+
+  // The graph only "feels aware of the cursor" while the user is freely
+  // exploring — once something is locked in (selection or a scenario),
+  // the ambient nudge would fight the deliberate focus state, so it pauses.
+  const proximityEnabled = !reducedMotion && !selectedNode
+  const proximity = useCursorProximity(svgRef, nodes, { enabled: proximityEnabled })
+
+  const hoveredPush = useMemo(() => {
+    const map = {}
+    if (!hoveredNodeId || hoveredNodeId === selectedNodeId) return map
+    const hoveredNode = findNodeById(nodes, hoveredNodeId)
+    if (!hoveredNode) return map
+    const { nodeIds } = getNeighborhood(edges, hoveredNodeId)
+    nodeIds.forEach((id) => {
+      if (id === hoveredNodeId) return
+      const n = findNodeById(nodes, id)
+      if (!n) return
+      const dx = n.x - hoveredNode.x
+      const dy = n.y - hoveredNode.y
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1
+      map[id] = { x: (dx / dist) * HOVER_PUSH, y: (dy / dist) * HOVER_PUSH }
+    })
+    return map
+  }, [hoveredNodeId, selectedNodeId, nodes, edges])
+
+  // Focus mode: when a node is selected, the ecosystem reorganizes around
+  // it — a clamped partial recenter of the whole graph, plus direct
+  // neighbors spreading outward and unrelated nodes receding slightly.
+  const { groupOffset, nodeOffsets, focalNode } = useGraphFocus(nodes, edges, selectedNodeId, VIEW_W, VIEW_H)
+
+  // X-ray direction: while exploring via hover or focus (not during a
+  // scripted scenario, which has its own cascade coloring), edges feeding
+  // INTO the anchor node read as "upstream / risk flowing in" (amber),
+  // edges flowing OUT read as "downstream / value flowing onward" (lime).
+  const directionAnchorId = hoveredNodeId || selectedNodeId
+  const edgeDirection = useMemo(() => {
+    const map = {}
+    if (!directionAnchorId) return map
+    edges.forEach((e) => {
+      if (e.target === directionAnchorId) map[e.id] = 'in'
+      else if (e.source === directionAnchorId) map[e.id] = 'out'
+    })
+    return map
+  }, [directionAnchorId, edges])
+
+  // Floating intelligence annotations for the focused node — anchored below
+  // it but clamped well inside the viewBox so a node near any edge can
+  // never push the overlay off-canvas.
+  const insightAnchor = useMemo(() => {
+    if (!focalNode) return null
+    return {
+      x: clamp(focalNode.x + groupOffset.x, 190, VIEW_W - 190),
+      y: clamp(focalNode.y + groupOffset.y + 118, 70, VIEW_H - 56),
+    }
+  }, [focalNode, groupOffset])
+
+  const insightLines = useMemo(() => {
+    if (!selectedNode) return []
+    const lines = [selectedNode.insight]
+    const dep = selectedNode.metrics?.dependency
+    if (typeof dep === 'number') {
+      lines.push(`${dep}% of this node's neighborhood depends on it directly.`)
+    }
+    return lines.slice(0, 2)
+  }, [selectedNode])
+
+  return (
+    <section className="panel twin-panel">
+      <div className="panel-header">
+        <span className="panel-title">
+          <GitCommit size={13} />
+          Business Digital Twin
+        </span>
+        <div className="twin-header-meta">
+          <span className="signal-caption" style={{ margin: 0 }}>
+            {selectedNode ? 'Exploring dependency universe' : 'Suppliers → Products → Bundles → Customers → Revenue'}
+          </span>
+          <span className="twin-meta-divider" />
+          <span className="twin-meta-stat">{businessMetrics.monitoredEntities} entities</span>
+          <span className="twin-meta-stat" style={{ color: 'var(--status-healthy)' }}>
+            {businessMetrics.ecosystemHealth}% health
+          </span>
+        </div>
+      </div>
+
+      <div className="twin-canvas-wrap">
+        <GraphControls
+          highlightMode={highlightMode}
+          onToggleDependencies={() => toggleHighlightMode('dependencies')}
+          onToggleRisk={() => toggleHighlightMode('risk')}
+          signalFilterActive={signalFilterActive}
+          onToggleFilter={toggleSignalFilter}
+          onReset={resetView}
+        />
+
+        <GraphBreadcrumb focusedLabel={selectedNode?.label} onBack={clearSelection} />
+
+        <svg
+          ref={svgRef}
+          className="twin-svg"
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <defs>
+            <radialGradient id="nodeGradient" cx="35%" cy="30%" r="75%">
+              <stop offset="0%" stopColor="#232a24" />
+              <stop offset="100%" stopColor="#181d1a" />
+            </radialGradient>
+            <pattern id="twinGrid" width="34" height="34" patternUnits="userSpaceOnUse">
+              <circle cx="1" cy="1" r="1" fill="rgba(232,230,223,0.05)" />
+            </pattern>
+            <radialGradient id="territoryFade">
+              <stop offset="0%" stopColor="#e8e6df" stopOpacity="0.032" />
+              <stop offset="100%" stopColor="#e8e6df" stopOpacity="0" />
+            </radialGradient>
+            {/* Atmospheric grain — a barely-visible texture so the ecosystem reads
+                as a deep, layered space rather than a flat vector diagram. */}
+            <filter id="grainFilter">
+              <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" result="noise" />
+              <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0.91  0 0 0 0 0.90  0 0 0 0 0.87  0 0 0 0.05 0" />
+            </filter>
+            {/* Focus vignette — a soft spotlight centered on the focal node,
+                used to make peripheral regions feel "quieter" without
+                physically moving them far from their hand-tuned layout. */}
+            {focalNode && (
+              <radialGradient
+                id="focusVignette"
+                cx="0"
+                cy="0"
+                r="1"
+                gradientUnits="userSpaceOnUse"
+                gradientTransform={`translate(${focalNode.x + groupOffset.x} ${focalNode.y + groupOffset.y}) scale(430)`}
+              >
+                <stop offset="0%" stopColor="#0b0d0c" stopOpacity="0" />
+                <stop offset="55%" stopColor="#0b0d0c" stopOpacity="0" />
+                <stop offset="100%" stopColor="#0b0d0c" stopOpacity="0.55" />
+              </radialGradient>
+            )}
+          </defs>
+
+          <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#twinGrid)" />
+
+          {/* Territories — organic, faint spatial regions with embedded labels,
+              standing in for a legend/section header without being one. */}
+          <g className="territory-layer">
+            {clusters.map((c) => (
+              <GraphTerritory key={c.id} cluster={c} faded={Boolean(selectedNode)} />
+            ))}
+          </g>
+
+          {/* Everything below reorganizes together under focus mode's clamped recenter. */}
+          <g
+            style={{
+              transform: `translate(${groupOffset.x}px, ${groupOffset.y}px)`,
+              transition: 'transform 0.5s cubic-bezier(0.16,1,0.3,1)',
+            }}
+          >
+            {/* Edges rendered first so nodes sit visually above connections */}
+            <g>
+              {edges.map((edge, i) => {
+                const sourceNode = findNodeById(nodes, edge.source)
+                const targetNode = findNodeById(nodes, edge.target)
+                if (!sourceNode || !targetNode) return null
+                const sOff = nodeOffsets[sourceNode.id] || { x: 0, y: 0 }
+                const tOff = nodeOffsets[targetNode.id] || { x: 0, y: 0 }
+                const shiftedSource = { x: sourceNode.x + sOff.x, y: sourceNode.y + sOff.y }
+                const shiftedTarget = { x: targetNode.x + tOff.x, y: targetNode.y + tOff.y }
+                return (
+                  <DependencyEdge
+                    key={edge.id}
+                    edge={edge}
+                    sourceNode={shiftedSource}
+                    targetNode={shiftedTarget}
+                    isDimmed={isEdgeDimmed(edge.id, edge)}
+                    isHighlighted={isEdgeHighlighted(edge.id)}
+                    isCascadeActive={cascadeActiveEdgeIds.has(edge.id)}
+                    focusDirection={edgeDirection[edge.id]}
+                    particleSeed={i}
+                    reducedMotion={reducedMotion}
+                  />
+                )
+              })}
+            </g>
+
+            <g>
+              {nodes.map((node, i) => {
+                const push = hoveredPush[node.id]
+                const prox = proximity[node.id]
+                const focus = nodeOffsets[node.id]
+                const offsetX = (push?.x || 0) + (prox?.offsetX || 0) + (focus?.x || 0)
+                const offsetY = (push?.y || 0) + (prox?.offsetY || 0) + (focus?.y || 0)
+                return (
+                  <BusinessNode
+                    key={node.id}
+                    node={node}
+                    isDimmed={isNodeDimmed(node.id)}
+                    isSelected={selectedNode?.id === node.id}
+                    isHovered={hoveredNodeId === node.id}
+                    onHover={setHoveredNodeId}
+                    onLeave={() => setHoveredNodeId(null)}
+                    onClick={selectNode}
+                    offsetX={offsetX}
+                    offsetY={offsetY}
+                    proximityScale={prox?.scale || 1}
+                    reducedMotion={reducedMotion}
+                    driftSeed={i}
+                    isCascadeActive={cascadeActiveNodeIds.has(node.id)}
+                  />
+                )
+              })}
+            </g>
+          </g>
+
+          {/* Vignette + insight overlay sit above the graph content but below UI chrome */}
+          {focalNode && (
+            <rect
+              x="-100"
+              y="-100"
+              width={VIEW_W + 200}
+              height={VIEW_H + 200}
+              fill="url(#focusVignette)"
+              pointerEvents="none"
+              style={{ transition: 'opacity 0.4s ease' }}
+            />
+          )}
+          {insightAnchor && <GraphInsightOverlay x={insightAnchor.x} y={insightAnchor.y} lines={insightLines} />}
+
+          <rect x="0" y="0" width={VIEW_W} height={VIEW_H} filter="url(#grainFilter)" pointerEvents="none" />
+        </svg>
+
+        <div className="twin-legend">
+          <span className="legend-item">
+            <span className="legend-dot" style={{ background: '#62c98b' }} /> Healthy
+          </span>
+          <span className="legend-item">
+            <span className="legend-dot" style={{ background: '#ffb347' }} /> Watch
+          </span>
+          <span className="legend-item">
+            <span className="legend-dot" style={{ background: '#ff5c4d' }} /> Critical
+          </span>
+          <span className="legend-item">
+            <span className="legend-dot" style={{ background: '#8b7cff' }} /> NEXUS Intelligence
+          </span>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\twin\BusinessNode.jsx ====================
+
+import {
+  Truck,
+  Package,
+  Layers,
+  Users,
+  IndianRupee,
+  Zap,
+} from 'lucide-react'
+import { NODE_TYPES, HEALTH_COLOR, NODE_IMPORTANCE, ACCENT } from '../../utils/constants'
+import NodeConstellation from './NodeConstellation'
+import CustomerCohort from './CustomerCohort'
+
+const ICON_BY_TYPE = {
+  [NODE_TYPES.SUPPLIER]: Truck,
+  [NODE_TYPES.PRODUCT]: Package,
+  [NODE_TYPES.BUNDLE]: Layers,
+  [NODE_TYPES.REVENUE]: IndianRupee,
+  [NODE_TYPES.SIGNAL]: Zap,
+}
+
+// Visual importance drives radius so Revenue + Premium Bundle read as the
+// gravitational centers of the ecosystem, and minor nodes (Supplier B)
+// recede without disappearing.
+const RADIUS_BY_IMPORTANCE = {
+  [NODE_IMPORTANCE.MINOR]: 26,
+  [NODE_IMPORTANCE.STANDARD]: 30,
+  [NODE_IMPORTANCE.MAJOR]: 34,
+  [NODE_IMPORTANCE.HERO]: 40,
+}
+
+function hexagonPoints(r) {
+  // Flat-top hexagon — reads as a tangible manufactured asset, distinct
+  // from the organic circles used for sources/outcomes.
+  return Array.from({ length: 6 }, (_, i) => {
+    const angle = (Math.PI / 180) * (60 * i - 90)
+    return `${(r * 1.06 * Math.cos(angle)).toFixed(1)},${(r * 1.06 * Math.sin(angle)).toFixed(1)}`
+  }).join(' ')
+}
+
+function diamondPoints(r) {
+  const s = r * 0.98
+  return `0,${-s} ${s},0 0,${s} ${-s},0`
+}
+
+export default function BusinessNode({
+  node,
+  isDimmed,
+  isSelected,
+  isHovered,
+  onHover,
+  onLeave,
+  onClick,
+  offsetX = 0,
+  offsetY = 0,
+  proximityScale = 1,
+  reducedMotion = false,
+  driftSeed = 0,
+  isCascadeActive = false,
+}) {
+  const Icon = ICON_BY_TYPE[node.type]
+  const r = RADIUS_BY_IMPORTANCE[node.importance] || 30
+  const healthColor = HEALTH_COLOR[node.health]
+  const isSignal = node.type === NODE_TYPES.SIGNAL
+  const isSupplier = node.type === NODE_TYPES.SUPPLIER
+  const isProduct = node.type === NODE_TYPES.PRODUCT
+  const isBundle = node.type === NODE_TYPES.BUNDLE
+  const isRevenue = node.type === NODE_TYPES.REVENUE
+  const isCohort = node.type === NODE_TYPES.CUSTOMER_COHORT
+  const ringColor = isSignal ? ACCENT.INTELLIGENCE : healthColor
+  const selectionColor = ACCENT.LIME // selection is always the NEXUS signature color
+
+  const bodyGlow = isSelected
+    ? `drop-shadow(0 0 16px ${selectionColor}55)`
+    : isCascadeActive
+    ? `drop-shadow(0 0 14px ${healthColor}70)`
+    : isHovered
+    ? `drop-shadow(0 0 12px ${ringColor}55)`
+    : isRevenue
+    ? `drop-shadow(0 0 20px ${healthColor}30)` // Revenue carries a permanent faint gravity glow
+    : 'none'
+
+  return (
+    <g
+      className={`graph-node ${isDimmed ? 'dimmed' : ''}`}
+      transform={`translate(${node.x + offsetX}, ${node.y + offsetY}) scale(${proximityScale})`}
+      onMouseEnter={() => onHover(node.id)}
+      onMouseLeave={onLeave}
+      onClick={() => onClick(node.id)}
+    >
+      <g
+        className={reducedMotion ? '' : 'node-drift'}
+        style={
+          reducedMotion
+            ? undefined
+            : { '--drift-dur': `${9 + (driftSeed % 5)}s`, '--drift-delay': `${(driftSeed % 7) * -0.9}s` }
+        }
+      >
+        {/* ---- SUPPLIER: origin/source field — asymmetric emission rays ---- */}
+        {isSupplier && (
+          <g className="source-emission" opacity={0.55}>
+            {[-24, 0, 24].map((deg, i) => {
+              const rad = (deg * Math.PI) / 180
+              const x1 = Math.cos(rad) * (r + 4)
+              const y1 = Math.sin(rad) * (r + 4)
+              const x2 = Math.cos(rad) * (r + 17 + i * 2)
+              const y2 = Math.sin(rad) * (r + 17 + i * 2)
+              return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={healthColor} strokeWidth={1.4} strokeLinecap="round" />
+            })}
+          </g>
+        )}
+
+        {/* ---- BUNDLE: convergence field — rings implying multiple paths meeting ---- */}
+        {isBundle && (
+          <>
+            <circle r={r + 15} fill="none" stroke={ACCENT.LIME} strokeWidth={0.75} opacity={0.16} />
+            <circle r={r + 26} fill="none" stroke={ACCENT.LIME} strokeWidth={0.75} opacity={0.08} />
+          </>
+        )}
+
+        {/* ---- REVENUE: gravity destination — layered outcome rings ---- */}
+        {isRevenue && (
+          <>
+            <circle r={r + 12} fill="none" stroke={healthColor} strokeWidth={0.75} opacity={0.22} />
+            <circle r={r + 22} fill="none" stroke={healthColor} strokeWidth={0.75} opacity={0.12} />
+            <circle r={r + 34} fill="none" stroke={healthColor} strokeWidth={0.6} opacity={0.06} />
+          </>
+        )}
+
+        {/* Breathing halo — communicates "this node is live" without being noisy */}
+        <circle
+          className={`graph-node-halo ${reducedMotion ? '' : 'breathing'}`}
+          r={r + 10}
+          fill="none"
+          stroke={ringColor}
+          strokeWidth={1}
+          opacity={0.25}
+          style={{ animationDelay: `${(node.x % 5) * 0.3}s` }}
+        />
+
+        {/* Selection ring is always signature lime — hover ring previews in the
+            node's own health/intelligence color, so the two states read distinctly. */}
+        {isCohort ? (
+          <circle
+            className="graph-node-ring"
+            r={r + 8}
+            fill="none"
+            stroke={isSelected ? selectionColor : isHovered ? ringColor : 'transparent'}
+            strokeWidth={isSelected ? 2 : 1.2}
+            opacity={isSelected ? 0.85 : 0.45}
+          />
+        ) : isProduct ? (
+          <polygon
+            points={hexagonPoints(r + 6)}
+            fill="none"
+            stroke={isSelected ? selectionColor : isHovered ? ringColor : 'transparent'}
+            strokeWidth={isSelected ? 2.2 : 1.4}
+            opacity={isSelected ? 0.95 : 0.5}
+          />
+        ) : isSignal ? (
+          <polygon
+            points={diamondPoints(r + 7)}
+            fill="none"
+            stroke={isSelected ? selectionColor : isHovered ? ringColor : 'transparent'}
+            strokeWidth={isSelected ? 2.2 : 1.4}
+            opacity={isSelected ? 0.95 : 0.5}
+          />
+        ) : (
+          <circle
+            className="graph-node-ring"
+            r={r + 6}
+            fill="none"
+            stroke={isSelected ? selectionColor : isHovered ? ringColor : 'transparent'}
+            strokeWidth={isSelected ? 2.2 : 1.4}
+            opacity={isSelected ? 0.95 : 0.5}
+          />
+        )}
+
+        {/* ---- Node body — silhouette differs by economic role ---- */}
+        {isCohort ? (
+          <CustomerCohort r={r} healthColor={healthColor} isSelected={isSelected} ringColor={ringColor} />
+        ) : isProduct ? (
+          <polygon points={hexagonPoints(r)} className="graph-node-body" fill="url(#nodeGradient)" stroke={healthColor} strokeWidth={1.6} style={{ filter: bodyGlow }} />
+        ) : isSignal ? (
+          <polygon points={diamondPoints(r)} className="graph-node-body" fill="url(#nodeGradient)" stroke={healthColor} strokeWidth={1.6} style={{ filter: bodyGlow }} />
+        ) : (
+          <circle className="graph-node-body" r={r} fill="url(#nodeGradient)" stroke={healthColor} strokeWidth={1.6} style={{ filter: bodyGlow }} />
+        )}
+
+        {/* Cascade impact pulse — a one-shot expanding ring marking the exact
+            moment a scenario's consequence reaches this node. Renders once
+            (not looping), so the sequence reads as discrete, legible steps. */}
+        {isCascadeActive && !reducedMotion && (
+          <circle className="cascade-pulse-ring" r={r} fill="none" stroke={healthColor} strokeWidth={2} style={{ '--pulse-r0': r }} />
+        )}
+
+        {/* Health indicator dot (skipped for cohorts — the particle colors already carry health) */}
+        {!isCohort && <circle cx={r - 6} cy={-r + 6} r={4} fill={healthColor} stroke="#181d1a" strokeWidth={1.5} />}
+
+        {/* Icon */}
+        {Icon && !isCohort && (
+          <g className="graph-node-icon-wrap" transform="translate(-9, -9)">
+            <Icon size={18} color="#e8e6df" strokeWidth={1.8} />
+          </g>
+        )}
+        {isCohort && (
+          <g transform="translate(-7, -7)" opacity={0.85}>
+            <Users size={14} color="#e8e6df" strokeWidth={1.8} />
+          </g>
+        )}
+
+        {/* Labels */}
+        <text className="node-label" textAnchor="middle" y={r + 22}>
+          {node.label}
+        </text>
+        <text className="node-sublabel" textAnchor="middle" y={r + 36}>
+          {node.sublabel}
+        </text>
+      </g>
+
+      {/* Constellation renders outside the drift group so its connector
+          lines stay perfectly anchored to the node's stable position. */}
+      {isSelected && <NodeConstellation node={node} r={r} />}
+    </g>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\twin\CustomerCohort.jsx ====================
+
+// Deterministic pseudo-scatter so cohort particles are stable across
+// re-renders without needing Math.random() (which would jitter on every
+// render). Small hand-picked angle/radius pairs read as an organic
+// population rather than a mechanical ring.
+const SCATTER = [
+  { a: 18, d: 0.32 }, { a: 61, d: 0.78 }, { a: 104, d: 0.5 }, { a: 149, d: 0.85 },
+  { a: 196, d: 0.4 }, { a: 233, d: 0.7 }, { a: 278, d: 0.55 }, { a: 312, d: 0.82 },
+  { a: 342, d: 0.28 },
+]
+
+export default function CustomerCohort({ r, healthColor, isSelected, ringColor }) {
+  return (
+    <g className="cohort-cluster">
+      {/* Faint population boundary — implies "a group", not a single entity */}
+      <circle r={r + 4} fill="none" stroke={healthColor} strokeWidth={0.75} strokeOpacity={0.2} strokeDasharray="2 5" />
+
+      {SCATTER.map((p, i) => {
+        const rad = (p.a * Math.PI) / 180
+        const dist = p.d * (r - 6)
+        const cx = Math.cos(rad) * dist
+        const cy = Math.sin(rad) * dist
+        const size = 2.2 + (i % 3) * 0.9
+        return (
+          <circle
+            key={i}
+            cx={cx}
+            cy={cy}
+            r={size}
+            fill={i % 4 === 0 ? (isSelected ? ringColor : healthColor) : 'var(--text-secondary)'}
+            opacity={i % 4 === 0 ? 0.9 : 0.55}
+          />
+        )
+      })}
+
+      {/* Center anchor — small, so particles (not a big circle) read first */}
+      <circle r={5} fill="var(--bg-elevated)" stroke={healthColor} strokeWidth={1.4} />
+    </g>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\twin\DependencyEdge.jsx ====================
+
+import { useMemo } from 'react'
+import { ACCENT } from '../../utils/constants'
+
+// Critical (primary supply→revenue chain) edges get the NEXUS signature
+// lime — they're the main artery of the ecosystem. Signal edges (Razorpay)
+// get intelligence violet. Backup/standard paths stay neutral graphite.
+const EDGE_COLOR = {
+  critical: ACCENT.LIME,
+  backup: '#5f6861',
+  standard: '#5f6861',
+  signal: ACCENT.INTELLIGENCE,
+}
+
+function hashSign(id) {
+  let sum = 0
+  for (let i = 0; i < id.length; i++) sum += id.charCodeAt(i)
+  return sum % 2 === 0 ? 1 : -1
+}
+
+/** Builds an organic quadratic curve — direction alternates per edge (via a
+ * deterministic hash of its id) so the graph doesn't read as a mechanical
+ * fan of identically-bowed lines. */
+function buildCurve(source, target, edgeId) {
+  const mx = (source.x + target.x) / 2
+  const my = (source.y + target.y) / 2
+  const dx = target.x - source.x
+  const dy = target.y - source.y
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1
+  const sign = hashSign(edgeId)
+  const offset = Math.min(46, dist * 0.17) * sign
+  const cx = mx - (dy / dist) * offset
+  const cy = my + (dx / dist) * offset
+  return `M ${source.x} ${source.y} Q ${cx} ${cy} ${target.x} ${target.y}`
+}
+
+export default function DependencyEdge({
+  edge,
+  sourceNode,
+  targetNode,
+  isDimmed,
+  isHighlighted,
+  particleSeed,
+  reducedMotion = false,
+  isCascadeActive = false,
+  focusDirection, // 'in' | 'out' | undefined — only set during plain node focus (not scenario)
+}) {
+  const path = useMemo(() => buildCurve(sourceNode, targetNode, edge.id), [sourceNode, targetNode, edge.id])
+  const baseColor = EDGE_COLOR[edge.kind] || EDGE_COLOR.standard
+  const isDashed = edge.kind === 'backup'
+  const pathId = `path-${edge.id}`
+  const emphasized = isHighlighted || isCascadeActive
+  const isHiddenEdge = Boolean(edge.hidden)
+
+  // Hidden dependencies stay nearly invisible until NEXUS "discovers" them —
+  // then they reveal in intelligence violet, distinct from their normal kind color.
+  let color = baseColor
+  if (isCascadeActive) color = 'var(--status-critical)'
+  else if (isHiddenEdge && emphasized) color = ACCENT.INTELLIGENCE
+  else if (!isHiddenEdge && emphasized && focusDirection === 'in') color = 'var(--status-warning)'
+  else if (!isHiddenEdge && emphasized && focusDirection === 'out') color = ACCENT.LIME
+
+  const restingOpacity = isHiddenEdge ? 0.05 : edge.kind === 'critical' ? 0.5 : 0.32
+
+  return (
+    <g>
+      <path
+        id={pathId}
+        className={`dep-edge ${isDimmed ? 'dimmed' : ''} ${emphasized ? 'highlighted' : ''} ${isHiddenEdge ? 'hidden-dep' : ''}`}
+        d={path}
+        stroke={color}
+        strokeWidth={emphasized ? (isHiddenEdge ? 2.2 : 2.6) : edge.kind === 'critical' ? 1.8 : 1.2}
+        strokeOpacity={emphasized ? (isHiddenEdge ? 0.85 : 0.9) : restingOpacity}
+        strokeDasharray={isDashed ? '4 5' : undefined}
+        style={{ transition: 'stroke 0.35s ease, stroke-width 0.35s ease, stroke-opacity 0.35s ease' }}
+      />
+
+      {/* Animated flow particle — only on non-dimmed, meaningful paths to avoid visual
+          noise, and skipped outright under prefers-reduced-motion (SMIL animateMotion
+          can't be paused via CSS, so it must not be rendered at all). */}
+      {!reducedMotion && !isDimmed && (edge.kind === 'critical' || edge.kind === 'signal' || emphasized) && (
+        <circle r={emphasized ? 3.2 : 2.2} fill={color} className="flow-particle" style={{ color }}>
+          <animateMotion
+            dur={`${3.4 + (particleSeed % 5) * 0.4}s`}
+            repeatCount="indefinite"
+            begin={`${(particleSeed % 4) * 0.6}s`}
+          >
+            <mpath href={`#${pathId}`} />
+          </animateMotion>
+        </circle>
+      )}
+    </g>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\twin\GraphBreadcrumb.jsx ====================
+
+import { ChevronRight, ArrowLeft } from 'lucide-react'
+
+export default function GraphBreadcrumb({ focusedLabel, onBack }) {
+  if (!focusedLabel) return null
+
+  return (
+    <div className="graph-breadcrumb">
+      <button className="breadcrumb-back" onClick={onBack} aria-label="Back to full ecosystem">
+        <ArrowLeft size={12} />
+      </button>
+      <span className="breadcrumb-crumb muted">Ecosystem</span>
+      <ChevronRight size={11} className="breadcrumb-chevron" />
+      <span className="breadcrumb-crumb">{focusedLabel}</span>
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\twin\GraphControls.jsx ====================
+
+import { RotateCcw, GitBranch, AlertTriangle, Filter } from 'lucide-react'
+
+export default function GraphControls({
+  highlightMode,
+  onToggleDependencies,
+  onToggleRisk,
+  signalFilterActive,
+  onToggleFilter,
+  onReset,
+}) {
+  return (
+    <div className="graph-controls">
+      <button className="graph-control-btn" onClick={onReset}>
+        <RotateCcw size={12} />
+        Reset View
+      </button>
+      <button
+        className={`graph-control-btn ${highlightMode === 'dependencies' ? 'active' : ''}`}
+        onClick={onToggleDependencies}
+      >
+        <GitBranch size={12} />
+        Dependencies
+      </button>
+      <button
+        className={`graph-control-btn ${highlightMode === 'risk' ? 'active' : ''}`}
+        onClick={onToggleRisk}
+      >
+        <AlertTriangle size={12} />
+        Risk
+      </button>
+      <button
+        className={`graph-control-btn ${signalFilterActive ? 'active' : ''}`}
+        onClick={onToggleFilter}
+      >
+        <Filter size={12} />
+        Filter
+      </button>
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\twin\GraphInsightOverlay.jsx ====================
+
+function wrapText(str, maxChars, maxLines) {
+  const words = str.split(' ')
+  const lines = []
+  let current = ''
+  for (const w of words) {
+    const candidate = current ? `${current} ${w}` : w
+    if (candidate.length > maxChars && current) {
+      lines.push(current)
+      current = w
+    } else {
+      current = candidate
+    }
+    if (lines.length === maxLines) break
+  }
+  if (current && lines.length < maxLines) lines.push(current)
+  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
+    lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*$/, '') + '…'
+  }
+  return lines
+}
+
+/**
+ * Floating intelligence annotations — short discovered-fact sentences near
+ * the focal node, not a card. Position is computed and clamped by the
+ * parent (BusinessGraph), since a node near a viewBox edge can't safely
+ * self-anchor its overlay without risking clipping.
+ */
+export default function GraphInsightOverlay({ x, y, lines }) {
+  if (!lines?.length) return null
+
+  return (
+    <g className="insight-overlay" style={{ pointerEvents: 'none' }}>
+      <line x1={x} y1={y - 14} x2={x} y2={y - 4} stroke="var(--accent-primary)" strokeWidth={1} opacity={0.5} />
+      <circle cx={x} cy={y - 16} r={2.5} fill="var(--accent-primary)" opacity={0.85} />
+      {lines.map((line, li) => {
+        const wrapped = wrapText(line, 46, 2)
+        return wrapped.map((wl, wi) => (
+          <text
+            key={`${li}-${wi}`}
+            x={x}
+            y={y + li * 30 + wi * 13}
+            textAnchor="middle"
+            className={wi === 0 && li === 0 ? 'overlay-line-primary' : 'overlay-line'}
+          >
+            {wl}
+          </text>
+        ))
+      })}
+    </g>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\twin\GraphTerritory.jsx ====================
+
+// Small fixed jitter set so each territory's contour reads as an organic
+// blob rather than a perfect ellipse, without needing real path/noise math.
+const CONTOUR_JITTER = [1, 0.92, 1.06, 0.96, 1.1, 0.94, 1.03, 1]
+
+function buildContourPath(cx, cy, rx, ry) {
+  const points = CONTOUR_JITTER.map((j, i) => {
+    const angle = (Math.PI * 2 * i) / CONTOUR_JITTER.length
+    return [cx + Math.cos(angle) * rx * j, cy + Math.sin(angle) * ry * j]
+  })
+  const d = points
+    .map(([x, y], i) => {
+      if (i === 0) return `M ${x.toFixed(1)} ${y.toFixed(1)}`
+      const [px, py] = points[i - 1]
+      const mx = (px + x) / 2
+      const my = (py + y) / 2
+      return `Q ${px.toFixed(1)} ${py.toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)}`
+    })
+    .join(' ')
+  return `${d} Z`
+}
+
+export default function GraphTerritory({ cluster, faded }) {
+  const contour = buildContourPath(cluster.cx, cluster.cy, cluster.rx, cluster.ry)
+
+  return (
+    <g className="territory" opacity={faded ? 0.35 : 1} style={{ transition: 'opacity 0.4s ease' }}>
+      <ellipse cx={cluster.cx} cy={cluster.cy} rx={cluster.rx} ry={cluster.ry} fill="url(#territoryFade)" />
+      <path d={contour} fill="none" stroke="var(--border-soft)" strokeWidth={0.6} opacity={0.35} />
+      <text x={cluster.cx} y={cluster.cy - cluster.ry + 22} textAnchor="middle" className="territory-label">
+        {cluster.label.toUpperCase()}
+      </text>
+    </g>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\twin\NodeConstellation.jsx ====================
+
+import { NODE_TYPES } from '../../utils/constants'
+
+// Which four metric keys orbit a node, per type — deliberately different
+// per type (per PHASE 1.75 spec) rather than one generic stat block.
+const FIELD_SETS = {
+  [NODE_TYPES.SUPPLIER]: [
+    { key: 'reliability', label: 'Reliability', suffix: '%' },
+    { key: 'leadTime', label: 'Lead Time' },
+    { key: 'revenueExposure', label: 'Revenue Exposure', suffix: '%' },
+    { key: 'dependency', label: 'Dependency', suffix: '%' },
+  ],
+  [NODE_TYPES.PRODUCT]: [
+    { key: 'directRevenue', label: 'Direct Revenue', suffix: '%' },
+    { key: 'downstreamInfluence', label: 'Downstream Influence', suffix: '%' },
+    { key: 'stockDaysLeft', label: 'Inventory Days' },
+    { key: 'dependency', label: 'Dependency', suffix: '%' },
+  ],
+  [NODE_TYPES.BUNDLE]: [
+    { key: 'directRevenue', label: 'Direct Revenue', suffix: '%' },
+    { key: 'downstreamInfluence', label: 'Downstream Influence', suffix: '%' },
+    { key: 'margin', label: 'Margin', suffix: '%' },
+    { key: 'dependency', label: 'Dependency', suffix: '%' },
+  ],
+  [NODE_TYPES.CUSTOMER_COHORT]: [
+    { key: 'revenueShare', label: 'Revenue Share', suffix: '%' },
+    { key: 'cohortSize', label: 'Cohort Size' },
+    { key: 'avgOrderValue', label: 'Avg Order' },
+    { key: 'dependency', label: 'Dependency', suffix: '%' },
+  ],
+  [NODE_TYPES.SIGNAL]: [
+    { key: 'successRate', label: 'Success Rate', suffix: '%' },
+    { key: 'avgTicket', label: 'Avg Ticket' },
+    { key: 'dailyVolume', label: 'Daily Volume' },
+    { key: 'revenueFlow', label: 'Revenue Flow', suffix: '%' },
+  ],
+  [NODE_TYPES.REVENUE]: [
+    { key: 'monthly', label: 'Monthly Revenue' },
+    { key: 'atRisk', label: 'Exposed Revenue' },
+    { key: 'growth', label: 'Growth', suffix: '%' },
+    { key: 'riskSensitivity', label: 'Risk Sensitivity', suffix: '%' },
+  ],
+}
+
+// Balanced satellite positions around a node, in local (0,0)-centered
+// offsets. Four corners for metrics keeps the connectors short and
+// legible instead of overlapping the graph's own edges.
+const SATELLITE_POSITIONS = [
+  { dx: -128, dy: -78 },
+  { dx: 128, dy: -78 },
+  { dx: -128, dy: 78 },
+  { dx: 128, dy: 78 },
+]
+
+export default function NodeConstellation({ node, r }) {
+  const fields = FIELD_SETS[node.type] || []
+  const values = fields
+    .map((f) => ({ ...f, value: node.metrics?.[f.key] }))
+    .filter((f) => f.value !== undefined && f.value !== null)
+    .slice(0, 4)
+
+  // Semantic zoom — a small number of sub-entities revealed only for nodes
+  // that define them, rendered as quiet satellites beneath the node rather
+  // than a literal recursive tree.
+  const drilldown = node.drilldown || []
+
+  return (
+    <g className="constellation" style={{ pointerEvents: 'none' }}>
+      {values.map((field, i) => {
+        const pos = SATELLITE_POSITIONS[i]
+        if (!pos) return null
+        const satX = pos.dx
+        const satY = pos.dy
+        // Connector runs from the node's edge toward the satellite, not from dead center,
+        // so it reads as a thin tether rather than a spoke through the node body.
+        const originX = Math.sign(satX) * (r + 4)
+        const originY = Math.sign(satY) * (r * 0.4)
+
+        return (
+          <g key={field.key} className="constellation-satellite" style={{ animationDelay: `${i * 60}ms` }}>
+            <line
+              x1={originX}
+              y1={originY}
+              x2={satX + (satX > 0 ? -34 : 34)}
+              y2={satY}
+              stroke="var(--border-soft)"
+              strokeWidth={1}
+            />
+            <text
+              x={satX}
+              y={satY - 4}
+              textAnchor="middle"
+              className="constellation-value"
+            >
+              {field.value}
+              {field.suffix || ''}
+            </text>
+            <text x={satX} y={satY + 11} textAnchor="middle" className="constellation-label">
+              {field.label}
+            </text>
+          </g>
+        )
+      })}
+
+      {drilldown.length > 0 && (
+        <g className="constellation-drilldown">
+          {drilldown.map((d, i) => {
+            const dy = r + 46 + i * 30
+            return (
+              <g key={d.label} className="constellation-satellite" style={{ animationDelay: `${(values.length + i) * 60}ms` }}>
+                <line x1={0} y1={r + 6} x2={0} y2={dy - 8} stroke="var(--border-soft)" strokeWidth={1} strokeDasharray="2 4" />
+                <circle cx={0} cy={dy} r={3.5} fill="var(--accent-primary)" opacity={0.8} />
+                <text x={10} y={dy + 3} className="constellation-drill-label">
+                  {d.label}
+                </text>
+                <text x={10} y={dy + 14} className="constellation-drill-sublabel">
+                  {d.sublabel}
+                </text>
+              </g>
+            )
+          })}
+        </g>
+      )}
+    </g>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\ui\Badge.jsx ====================
+
+import { HEALTH } from '../../utils/constants'
+
+const HEALTH_LABEL = {
+  [HEALTH.HEALTHY]: 'Healthy',
+  [HEALTH.WARNING]: 'Watch',
+  [HEALTH.CRITICAL]: 'Critical',
+}
+
+/**
+ * Small pill badge used for health states and status labels.
+ * variant: 'healthy' | 'warning' | 'critical' | 'neutral'
+ */
+export default function Badge({ variant = 'neutral', children }) {
+  const label = children ?? HEALTH_LABEL[variant] ?? variant
+  return <span className={`badge badge-${variant}`}>{label}</span>
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\ui\Card.jsx ====================
+
+/**
+ * Base elevated surface used throughout NEXUS. Kept intentionally minimal —
+ * most visual character comes from spacing, typography, and border color,
+ * not heavy card chrome.
+ */
+export default function Card({ children, className = '', ...rest }) {
+  return (
+    <div className={`card ${className}`} {...rest}>
+      {children}
+    </div>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\components\ui\Metric.jsx ====================
+
+/**
+ * Large numeric display used for hero metrics (revenue, risk score, etc).
+ * Uses Space Grotesk via the .metric-value / .risk-score classes for
+ * deliberate visual weight on important numbers.
+ */
+export default function Metric({ value, size = 22, className = '', unit }) {
+  return (
+    <span className={`metric-value ${className}`} style={{ fontSize: size }}>
+      {value}
+      {unit && <span style={{ fontSize: size * 0.5, marginLeft: 2, color: 'var(--text-tertiary)' }}>{unit}</span>}
+    </span>
+  )
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\data\businessData.js ====================
+
+import { NODE_TYPES, HEALTH, NODE_IMPORTANCE } from '../utils/constants'
+
+// ============================================================
+// BUSINESS DIGITAL TWIN — ECOSYSTEM DATA
+// Hand-positioned layout (viewBox 0 0 1000 560), grouped into five loose
+// clusters (see `clusters` below) so the graph reads as a genuine network —
+// convergence, branching, and hidden cross-dependencies — rather than a
+// single linear A→B→C flowchart.
+// ============================================================
+
+export const clusters = [
+  { id: 'supply', label: 'Supply', cx: 95, cy: 250, rx: 155, ry: 260 },
+  { id: 'products', label: 'Product Ecosystem', cx: 350, cy: 195, rx: 165, ry: 270 },
+  { id: 'offers', label: 'Offers', cx: 585, cy: 250, rx: 150, ry: 250 },
+  { id: 'customers', label: 'Customer Demand', cx: 850, cy: 195, rx: 145, ry: 220 },
+  { id: 'signals', label: 'Economic Signals', cx: 500, cy: 500, rx: 270, ry: 78 },
+]
+
+export const businessNodes = [
+  // ---------------- SUPPLY ----------------
+  {
+    id: 'supplier-a',
+    type: NODE_TYPES.SUPPLIER,
+    label: 'Supplier A',
+    sublabel: 'Primary Supplier',
+    cluster: 'supply',
+    x: 85,
+    y: 92,
+    health: HEALTH.CRITICAL,
+    importance: NODE_IMPORTANCE.STANDARD,
+    metrics: {
+      reliability: 81,
+      leadTime: '12 days',
+      revenueExposure: 31,
+      dependency: 54,
+    },
+    insight:
+      'Sole active source for Product X. A 10-day delay here has no buffered alternative in the next 72 hours.',
+    drilldown: [
+      { label: 'Raw Material Source', sublabel: 'Tier-2 dependency' },
+      { label: 'Packaging Dependency', sublabel: 'Shared with Supplier B' },
+    ],
+  },
+  {
+    id: 'supplier-b',
+    type: NODE_TYPES.SUPPLIER,
+    label: 'Supplier B',
+    sublabel: 'Backup Supplier',
+    cluster: 'supply',
+    x: 58,
+    y: 268,
+    health: HEALTH.HEALTHY,
+    importance: NODE_IMPORTANCE.MINOR,
+    metrics: {
+      reliability: 94,
+      leadTime: '19 days',
+      revenueExposure: 4,
+      dependency: 12,
+    },
+    insight: 'Reliable, but lead time is 7 days longer than Supplier A — not a same-week substitute.',
+  },
+  {
+    id: 'packaging-vendor',
+    type: NODE_TYPES.SUPPLIER,
+    label: 'Packaging Vendor',
+    sublabel: 'Shared Dependency',
+    cluster: 'supply',
+    x: 138,
+    y: 410,
+    health: HEALTH.HEALTHY,
+    importance: NODE_IMPORTANCE.MINOR,
+    metrics: {
+      reliability: 97,
+      leadTime: '5 days',
+      revenueExposure: 2,
+      dependency: 9,
+    },
+    insight: 'Low individual risk, but feeds packaging for every SKU in Product X — worth watching at scale.',
+  },
+
+  // ---------------- PRODUCTS ----------------
+  {
+    id: 'shared-inventory',
+    type: NODE_TYPES.PRODUCT,
+    label: 'Shared Inventory Buffer',
+    sublabel: 'Cross-Product Stock Pool',
+    cluster: 'products',
+    x: 358,
+    y: 38,
+    health: HEALTH.WARNING,
+    importance: NODE_IMPORTANCE.MINOR,
+    metrics: {
+      directRevenue: 0,
+      downstreamInfluence: 22,
+      stockDaysLeft: 9,
+      dependency: 38,
+    },
+    insight:
+      'A hidden single point of failure — Product X and Product Y both draw from this same buffer.',
+  },
+  {
+    id: 'product-x',
+    type: NODE_TYPES.PRODUCT,
+    label: 'Product X',
+    sublabel: 'Bestseller Component',
+    cluster: 'products',
+    x: 295,
+    y: 178,
+    health: HEALTH.WARNING,
+    importance: NODE_IMPORTANCE.MAJOR,
+    metrics: {
+      directRevenue: 8,
+      downstreamInfluence: 31,
+      stockDaysLeft: 6,
+      dependency: 46,
+    },
+    insight:
+      'Generates only 8% of direct revenue, but influences 31% of downstream revenue through Premium Bundle.',
+    drilldown: [{ label: 'Inventory Buffer', sublabel: '6 days of cover left' }],
+  },
+  {
+    id: 'product-y',
+    type: NODE_TYPES.PRODUCT,
+    label: 'Product Y',
+    sublabel: 'Complementary Product',
+    cluster: 'products',
+    x: 372,
+    y: 350,
+    health: HEALTH.HEALTHY,
+    importance: NODE_IMPORTANCE.STANDARD,
+    metrics: {
+      directRevenue: 11,
+      downstreamInfluence: 14,
+      stockDaysLeft: 28,
+      dependency: 18,
+    },
+    insight: 'Stable stock position. Feeds both Premium Bundle and standalone Add-on Revenue.',
+  },
+
+  // ---------------- OFFERS ----------------
+  {
+    id: 'premium-bundle',
+    type: NODE_TYPES.BUNDLE,
+    label: 'Premium Bundle',
+    sublabel: 'High-Margin Offer',
+    cluster: 'offers',
+    x: 570,
+    y: 235,
+    health: HEALTH.WARNING,
+    importance: NODE_IMPORTANCE.HERO,
+    metrics: {
+      directRevenue: 22,
+      downstreamInfluence: 31,
+      margin: 46,
+      dependency: 46,
+    },
+    insight:
+      'Central economic node. Depends on Product X availability and drives most VIP cohort purchases.',
+  },
+  {
+    id: 'addon-revenue',
+    type: NODE_TYPES.BUNDLE,
+    label: 'Add-on Revenue',
+    sublabel: 'Standalone Attach Sales',
+    cluster: 'offers',
+    x: 628,
+    y: 425,
+    health: HEALTH.HEALTHY,
+    importance: NODE_IMPORTANCE.MINOR,
+    metrics: {
+      directRevenue: 9,
+      downstreamInfluence: 6,
+      margin: 31,
+      dependency: 14,
+    },
+    insight: 'Small but healthy revenue line, entirely dependent on Product Y availability.',
+  },
+
+  // ---------------- CUSTOMERS ----------------
+  {
+    id: 'vip-customers',
+    type: NODE_TYPES.CUSTOMER_COHORT,
+    label: 'VIP Customers',
+    sublabel: 'High-Value Cohort',
+    cluster: 'customers',
+    x: 828,
+    y: 108,
+    health: HEALTH.WARNING,
+    importance: NODE_IMPORTANCE.MAJOR,
+    metrics: {
+      revenueShare: 42,
+      cohortSize: 312,
+      avgOrderValue: '₹4,850',
+      dependency: 42,
+    },
+    insight:
+      '42% of total revenue is linked to this cohort — concentrated exposure if Premium Bundle availability drops.',
+  },
+  {
+    id: 'repeat-customers',
+    type: NODE_TYPES.CUSTOMER_COHORT,
+    label: 'Repeat Customers',
+    sublabel: 'Recurring Cohort',
+    cluster: 'customers',
+    x: 862,
+    y: 282,
+    health: HEALTH.HEALTHY,
+    importance: NODE_IMPORTANCE.MINOR,
+    metrics: {
+      revenueShare: 19,
+      cohortSize: 940,
+      avgOrderValue: '₹1,420',
+      dependency: 10,
+    },
+    insight: 'Broad, low-concentration base — the steadiest revenue segment in the ecosystem.',
+  },
+
+  // ---------------- ECONOMIC SIGNALS ----------------
+  {
+    id: 'razorpay-payments',
+    type: NODE_TYPES.SIGNAL,
+    label: 'Razorpay Payments',
+    sublabel: 'Economic Signal Layer',
+    cluster: 'signals',
+    x: 415,
+    y: 508,
+    health: HEALTH.HEALTHY,
+    importance: NODE_IMPORTANCE.STANDARD,
+    metrics: {
+      successRate: 99.2,
+      avgTicket: '₹2,140',
+      dailyVolume: 386,
+      revenueFlow: 100,
+    },
+    insight: 'Payment success sits at 99.2% — the foundation signal every downstream revenue node depends on.',
+  },
+  {
+    id: 'checkout-flow',
+    type: NODE_TYPES.SIGNAL,
+    label: 'Checkout Flow',
+    sublabel: 'Conversion Funnel',
+    cluster: 'signals',
+    x: 618,
+    y: 490,
+    health: HEALTH.HEALTHY,
+    importance: NODE_IMPORTANCE.MINOR,
+    metrics: {
+      successRate: 97.6,
+      avgTicket: '₹2,140',
+      dailyVolume: 372,
+      revenueFlow: 96,
+    },
+    insight: 'Checkout friction here is the fastest lever on Premium Bundle conversion, ahead of pricing.',
+  },
+
+  // ---------------- OUTCOME ----------------
+  {
+    id: 'revenue',
+    type: NODE_TYPES.REVENUE,
+    label: 'Revenue',
+    sublabel: 'Economic Outcome',
+    cluster: 'offers',
+    x: 950,
+    y: 390,
+    health: HEALTH.HEALTHY,
+    importance: NODE_IMPORTANCE.HERO,
+    metrics: {
+      monthly: '₹18.45L',
+      atRisk: '₹2L',
+      growth: 14.2,
+      riskSensitivity: 38,
+    },
+    insight: 'Final outcome node. Aggregates VIP + repeat cohort spend and Razorpay-confirmed payment volume.',
+  },
+]
+
+export const businessEdges = [
+  { id: 'e-suppliera-productx', source: 'supplier-a', target: 'product-x', kind: 'critical', label: 'restocks' },
+  { id: 'e-supplierb-productx', source: 'supplier-b', target: 'product-x', kind: 'backup', label: 'backup supply' },
+  { id: 'e-packaging-productx', source: 'packaging-vendor', target: 'product-x', kind: 'standard', label: 'packaging' },
+  { id: 'e-sharedinv-productx', source: 'shared-inventory', target: 'product-x', kind: 'standard', label: 'shared buffer', hidden: true },
+  { id: 'e-sharedinv-producty', source: 'shared-inventory', target: 'product-y', kind: 'standard', label: 'shared buffer', hidden: true },
+  { id: 'e-productx-bundle', source: 'product-x', target: 'premium-bundle', kind: 'critical', label: 'core component' },
+  { id: 'e-producty-bundle', source: 'product-y', target: 'premium-bundle', kind: 'standard', label: 'pairs with' },
+  { id: 'e-producty-addon', source: 'product-y', target: 'addon-revenue', kind: 'standard', label: 'drives' },
+  { id: 'e-productx-vip', source: 'product-x', target: 'vip-customers', kind: 'standard', label: 'hidden pull', hidden: true },
+  { id: 'e-bundle-vip', source: 'premium-bundle', target: 'vip-customers', kind: 'critical', label: 'primary purchase' },
+  { id: 'e-vip-revenue', source: 'vip-customers', target: 'revenue', kind: 'critical', label: 'drives' },
+  { id: 'e-repeat-revenue', source: 'repeat-customers', target: 'revenue', kind: 'standard', label: 'drives' },
+  { id: 'e-addon-revenue', source: 'addon-revenue', target: 'revenue', kind: 'standard', label: 'contributes' },
+  { id: 'e-razorpay-checkout', source: 'razorpay-payments', target: 'checkout-flow', kind: 'signal', label: 'authorizes' },
+  { id: 'e-checkout-revenue', source: 'checkout-flow', target: 'revenue', kind: 'signal', label: 'confirms' },
+  { id: 'e-checkout-bundle', source: 'checkout-flow', target: 'premium-bundle', kind: 'signal', label: 'checkout friction', hidden: true },
+]
+
+// Ecosystem-level metrics surfaced in the header + left signal rail.
+export const businessMetrics = {
+  monitoredEntities: 28,
+  ecosystemHealth: 94,
+  revenue: {
+    value: '₹18.45L',
+    delta: 14.2,
+    caption: 'Monthly business velocity improving',
+  },
+  paymentHealth: {
+    value: '99.2%',
+    caption: 'Razorpay economic signals',
+  },
+  inventoryRisk: {
+    value: '2 alerts',
+    caption: 'Product X approaching critical level',
+  },
+  customerExposure: {
+    value: '42%',
+    caption: 'Revenue linked to VIP cohort',
+  },
+}
+
+export const hiddenDependency = {
+  title: 'Hidden Dependency Detected',
+  nodeId: 'product-x',
+  body: 'Product X generates only 8% of direct revenue but influences 31% of downstream revenue.',
+  path: ['Product X', 'Premium Bundle', 'VIP Customers', 'Revenue'],
+}
+
+export const cascadeRisk = {
+  score: 38,
+  max: 100,
+  label: 'Moderate vulnerability',
+  steps: [
+    { text: 'Supplier delay', emphasis: false },
+    { text: 'Inventory depletion', emphasis: false },
+    { text: 'Bundle availability drops', emphasis: false },
+    { text: 'VIP customer exposure', emphasis: false },
+    { text: '₹2L revenue at risk', emphasis: true },
+  ],
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\data\mockTransactions.js ====================
+
+// Structured mock Razorpay economic signals. Shape mirrors what a future
+// Phase 4 integration would pull from the Razorpay Orders/Payments API,
+// so the intelligence + engine layers can be wired to live data later
+// without a data-shape rewrite.
+
+export const mockPaymentSignals = {
+  successRate: 99.2,
+  failedPayments24h: 4,
+  refunds7d: 3,
+  avgTicketSize: 2140,
+  dailyVolume: 386,
+  trend: 'stable',
+}
+
+export const mockRecentTransactions = [
+  { id: 'pay_NX3821', status: 'captured', amount: 4850, product: 'Premium Bundle', cohort: 'VIP' },
+  { id: 'pay_NX3820', status: 'captured', amount: 1290, product: 'Product Y', cohort: 'Standard' },
+  { id: 'pay_NX3819', status: 'failed', amount: 4850, product: 'Premium Bundle', cohort: 'VIP' },
+  { id: 'pay_NX3818', status: 'captured', amount: 2140, product: 'Product X', cohort: 'Standard' },
+  { id: 'pay_NX3817', status: 'refunded', amount: 4850, product: 'Premium Bundle', cohort: 'VIP' },
+  { id: 'pay_NX3816', status: 'captured', amount: 4850, product: 'Premium Bundle', cohort: 'VIP' },
+]
+
+export const mockRevenueByProduct = [
+  { product: 'Premium Bundle', directShare: 22, downstreamShare: 31 },
+  { product: 'Product X', directShare: 8, downstreamShare: 31 },
+  { product: 'Product Y', directShare: 11, downstreamShare: 14 },
+  { product: 'Other SKUs', directShare: 59, downstreamShare: 24 },
+]
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\data\scenarios.js ====================
+
+// Phase 1 scenario definitions — structured for direct reuse by the Phase 2
+// simulation engine. In this phase, selecting a scenario drives a controlled
+// mock graph highlight + insight preview rather than a real traversal.
+
+export const scenarios = [
+  {
+    id: 'supplier-a-delay',
+    prompt: 'Supplier A delayed by 10 days',
+    query: 'What happens if Supplier A is delayed by 10 days?',
+    affectedNodeIds: ['supplier-a', 'product-x', 'premium-bundle', 'vip-customers', 'revenue'],
+    focusNodeId: 'supplier-a',
+    preview: {
+      headline: 'Supplier A delay → cascading exposure',
+      body:
+        'A 10-day delay drains Product X stock within 6 days, disrupting Premium Bundle availability for the VIP cohort.',
+      impact: '₹2L revenue at risk',
+      confidence: 'high',
+    },
+  },
+  {
+    id: 'product-x-discontinued',
+    prompt: 'Product X discontinued',
+    query: 'What happens if Product X is discontinued?',
+    affectedNodeIds: ['product-x', 'premium-bundle', 'vip-customers', 'revenue'],
+    focusNodeId: 'product-x',
+    preview: {
+      headline: 'Product X removal → bundle collapse risk',
+      body:
+        'Premium Bundle loses its core component. Without a substitute, VIP purchase rate for the bundle falls sharply.',
+      impact: '31% downstream revenue exposed',
+      confidence: 'high',
+    },
+  },
+  {
+    id: 'payment-success-drop',
+    prompt: 'Payment success drops 15%',
+    query: 'What happens if payment success drops 15%?',
+    affectedNodeIds: ['razorpay-payments', 'checkout-flow', 'premium-bundle', 'revenue'],
+    focusNodeId: 'razorpay-payments',
+    preview: {
+      headline: 'Payment friction → checkout leakage',
+      body:
+        'A 15% drop in Razorpay payment success rate increases checkout abandonment on Premium Bundle purchases.',
+      impact: '~₹1.4L monthly leakage',
+      confidence: 'medium',
+    },
+  },
+]
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\engine\dependencyEngine.js ====================
+
+// PHASE 2 — Dependency Graph Traversal Engine
+//
+// Not implemented in Phase 1. This file exists to reserve the module
+// boundary so Phase 1 UI components can import a stable interface later
+// without restructuring. Nothing here pretends to compute real traversal.
+
+/**
+ * Will compute the full upstream/downstream dependency chain for a node,
+ * including multi-hop weighted influence (e.g. Product X's 31% downstream
+ * revenue influence). Intentionally unimplemented in Phase 1.
+ */
+export function traverseDependencies() {
+  throw new Error('dependencyEngine.traverseDependencies is implemented in Phase 2.')
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\engine\interventionEngine.js ====================
+
+// PHASE 3 — Minimum Intervention Engine
+//
+// Not implemented in Phase 1. Will compare counterfactual futures
+// (do nothing / alternative / minimum intervention) and recommend the
+// smallest action that meaningfully changes the simulated outcome.
+
+/**
+ * Will return the smallest intervention that prevents or reduces the
+ * simulated cascading impact for a given scenario.
+ */
+export function recommendMinimumIntervention() {
+  throw new Error('interventionEngine.recommendMinimumIntervention is implemented in Phase 3.')
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\engine\riskEngine.js ====================
+
+// PHASE 2 — Risk Scoring Engine
+//
+// Not implemented in Phase 1. Will compute the 0–100 cascade risk score
+// shown in the NEXUS Intelligence panel from live dependency + signal data
+// rather than the static mock value used in Phase 1.
+
+/**
+ * Will compute a 0–100 cascade risk score for a given node or scenario,
+ * based on dependency depth, revenue exposure, and signal volatility.
+ */
+export function computeRiskScore() {
+  throw new Error('riskEngine.computeRiskScore is implemented in Phase 2.')
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\engine\simulationEngine.js ====================
+
+// PHASE 2/3 — Cascading Impact Simulation Engine
+//
+// Not implemented in Phase 1. Will consume a scenario (see src/data/scenarios.js)
+// and the dependency graph to produce a cascading impact timeline and
+// counterfactual futures (Phase 3). Reserved here for a stable import path.
+
+/**
+ * Will simulate the cascading consequence of a scenario across the
+ * dependency graph and return an ordered impact timeline with explanations.
+ */
+export function runSimulation() {
+  throw new Error('simulationEngine.runSimulation is implemented in Phase 2/3.')
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\hooks\useBusinessGraph.js ====================
+
+import { useMemo, useState, useCallback, useEffect } from 'react'
+import { businessNodes, businessEdges } from '../data/businessData'
+import { getNeighborhood, getPathEdgeIds } from '../utils/graphUtils'
+import { HEALTH, NODE_TYPES } from '../utils/constants'
+
+const CASCADE_STEP_MS = 450 // pacing between sequential cascade reveals
+
+/**
+ * Owns all interaction state for the Business Digital Twin graph: hover
+ * preview, click-to-focus selection (which now drives "focus mode" —
+ * neighborhood highlight + expansion — instead of opening a static
+ * inspector card), scenario cascade sequencing, and the compact control
+ * toggles (critical-path highlight / risk highlight / signal filter).
+ */
+export function useBusinessGraph() {
+  const [hoveredNodeId, setHoveredNodeId] = useState(null)
+  const [selectedNodeId, setSelectedNodeId] = useState(null)
+  const [highlightMode, setHighlightMode] = useState(null) // 'dependencies' | 'risk' | null
+  const [scenarioHighlight, setScenarioHighlight] = useState(null) // { nodeIds, focusNodeId } | null
+  const [signalFilterActive, setSignalFilterActive] = useState(false)
+  const [cascadeStep, setCascadeStep] = useState(0) // how many scenario nodes have been "revealed" so far
+
+  const nodes = businessNodes
+  const edges = businessEdges
+
+  // Selecting a node now IS focus mode: it establishes the neighborhood
+  // used for dimming/expansion, same as hovering did before. Hover still
+  // takes priority so a quick preview of another node doesn't require
+  // clearing the current focus first.
+  const activeNeighborhood = useMemo(() => {
+    if (scenarioHighlight) {
+      return {
+        nodeIds: new Set(scenarioHighlight.nodeIds),
+        edgeIds: new Set(
+          edges
+            .filter((e) => scenarioHighlight.nodeIds.includes(e.source) && scenarioHighlight.nodeIds.includes(e.target))
+            .map((e) => e.id)
+        ),
+      }
+    }
+    if (hoveredNodeId) return getNeighborhood(edges, hoveredNodeId)
+    if (selectedNodeId) return getNeighborhood(edges, selectedNodeId)
+    return null
+  }, [hoveredNodeId, selectedNodeId, scenarioHighlight, edges])
+
+  // --- Scenario cascade sequencing ---------------------------------------
+  // When a scenario becomes active, its affected nodes reveal one at a time
+  // rather than all at once, so the graph reads as "the impact travels
+  // through the ecosystem" instead of an instant flash.
+  useEffect(() => {
+    if (!scenarioHighlight) {
+      setCascadeStep(0)
+      return
+    }
+    setCascadeStep(1)
+    const ids = scenarioHighlight.nodeIds
+    const timers = []
+    for (let i = 1; i < ids.length; i++) {
+      timers.push(setTimeout(() => setCascadeStep(i + 1), i * CASCADE_STEP_MS))
+    }
+    return () => timers.forEach(clearTimeout)
+  }, [scenarioHighlight])
+
+  const cascadeActiveNodeIds = useMemo(() => {
+    if (!scenarioHighlight) return new Set()
+    return new Set(scenarioHighlight.nodeIds.slice(0, cascadeStep))
+  }, [scenarioHighlight, cascadeStep])
+
+  const cascadeActiveEdgeIds = useMemo(() => {
+    if (!scenarioHighlight) return new Set()
+    return getPathEdgeIds(edges, scenarioHighlight.nodeIds.slice(0, cascadeStep))
+  }, [scenarioHighlight, cascadeStep, edges])
+
+  const cascadeInProgress = Boolean(scenarioHighlight) && cascadeStep < (scenarioHighlight?.nodeIds.length ?? 0)
+
+  const riskNodeIds = useMemo(
+    () => new Set(nodes.filter((n) => n.health !== HEALTH.HEALTHY).map((n) => n.id)),
+    [nodes]
+  )
+
+  const criticalEdgeIds = useMemo(() => new Set(edges.filter((e) => e.kind === 'critical').map((e) => e.id)), [edges])
+  const criticalNodeIds = useMemo(() => {
+    const ids = new Set()
+    edges.forEach((e) => {
+      if (e.kind === 'critical') {
+        ids.add(e.source)
+        ids.add(e.target)
+      }
+    })
+    return ids
+  }, [edges])
+
+  const signalNodeIds = useMemo(() => new Set(nodes.filter((n) => n.type === NODE_TYPES.SIGNAL).map((n) => n.id)), [nodes])
+  const signalEdgeIds = useMemo(() => new Set(edges.filter((e) => e.kind === 'signal').map((e) => e.id)), [edges])
+
+  const isNodeDimmed = useCallback(
+    (nodeId) => {
+      if (signalFilterActive && signalNodeIds.has(nodeId)) return true
+      if (highlightMode === 'risk') return !riskNodeIds.has(nodeId)
+      if (highlightMode === 'dependencies') return !criticalNodeIds.has(nodeId)
+      if (activeNeighborhood) return !activeNeighborhood.nodeIds.has(nodeId)
+      return false
+    },
+    [activeNeighborhood, highlightMode, riskNodeIds, criticalNodeIds, signalFilterActive, signalNodeIds]
+  )
+
+  const isEdgeDimmed = useCallback(
+    (edgeId, edge) => {
+      if (signalFilterActive && signalEdgeIds.has(edgeId)) return true
+      if (highlightMode === 'risk') return !(riskNodeIds.has(edge.source) && riskNodeIds.has(edge.target)) && edge.kind !== 'critical'
+      if (highlightMode === 'dependencies') return !criticalEdgeIds.has(edgeId)
+      if (activeNeighborhood) return !activeNeighborhood.edgeIds.has(edgeId)
+      return false
+    },
+    [activeNeighborhood, highlightMode, riskNodeIds, criticalEdgeIds, signalFilterActive, signalEdgeIds]
+  )
+
+  const isEdgeHighlighted = useCallback(
+    (edgeId) => {
+      if (scenarioHighlight) return activeNeighborhood?.edgeIds.has(edgeId) ?? false
+      if (hoveredNodeId) return activeNeighborhood?.edgeIds.has(edgeId) ?? false
+      if (selectedNodeId) return activeNeighborhood?.edgeIds.has(edgeId) ?? false
+      return false
+    },
+    [activeNeighborhood, hoveredNodeId, selectedNodeId, scenarioHighlight]
+  )
+
+  const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) || null, [nodes, selectedNodeId])
+
+  const selectNode = useCallback((nodeId) => {
+    setScenarioHighlight(null)
+    setSelectedNodeId((prev) => (prev === nodeId ? null : nodeId))
+  }, [])
+
+  const clearSelection = useCallback(() => setSelectedNodeId(null), [])
+
+  const toggleHighlightMode = useCallback((mode) => {
+    setHighlightMode((prev) => (prev === mode ? null : mode))
+  }, [])
+
+  const resetView = useCallback(() => {
+    setSelectedNodeId(null)
+    setHighlightMode(null)
+    setHoveredNodeId(null)
+    setScenarioHighlight(null)
+    setSignalFilterActive(false)
+  }, [])
+
+  const toggleSignalFilter = useCallback(() => setSignalFilterActive((v) => !v), [])
+
+  const applyScenarioHighlight = useCallback((nodeIds, focusNodeId) => {
+    setHighlightMode(null)
+    setSelectedNodeId(focusNodeId || null)
+    setScenarioHighlight({ nodeIds, focusNodeId })
+  }, [])
+
+  const clearScenarioHighlight = useCallback(() => setScenarioHighlight(null), [])
+
+  return {
+    nodes,
+    edges,
+    hoveredNodeId,
+    setHoveredNodeId,
+    selectedNode,
+    selectedNodeId,
+    selectNode,
+    clearSelection,
+    highlightMode,
+    toggleHighlightMode,
+    isNodeDimmed,
+    isEdgeDimmed,
+    isEdgeHighlighted,
+    resetView,
+    applyScenarioHighlight,
+    clearScenarioHighlight,
+    scenarioHighlight,
+    signalFilterActive,
+    toggleSignalFilter,
+    cascadeActiveNodeIds,
+    cascadeActiveEdgeIds,
+    cascadeInProgress,
+  }
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\hooks\useCursorProximity.js ====================
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+const DEFAULT_RADIUS = 150 // SVG user-space units nodes start reacting within
+const MAX_OFFSET = 7 // px a node can be nudged away from the cursor
+const MAX_SCALE_BOOST = 0.035
+
+/**
+ * Makes the Digital Twin feel "aware" of the user: nodes within `radius` of
+ * the cursor drift a few px away and scale up very slightly, falling off
+ * smoothly with distance. Disabled entirely when `enabled` is false
+ * (prefers-reduced-motion) or while a node is actively selected, so the
+ * inspector doesn't fight the graph for stability.
+ */
+export function useCursorProximity(svgRef, nodes, { enabled = true, radius = DEFAULT_RADIUS } = {}) {
+  const [cursor, setCursor] = useState(null) // { x, y } in SVG user space, or null when outside
+  const rafRef = useRef(null)
+  const pendingPoint = useRef(null)
+
+  useEffect(() => {
+    if (!enabled) {
+      setCursor(null)
+      return
+    }
+    const svg = svgRef.current
+    if (!svg) return
+
+    function toSvgPoint(clientX, clientY) {
+      const pt = svg.createSVGPoint()
+      pt.x = clientX
+      pt.y = clientY
+      const ctm = svg.getScreenCTM()
+      if (!ctm) return null
+      const transformed = pt.matrixTransform(ctm.inverse())
+      return { x: transformed.x, y: transformed.y }
+    }
+
+    function flush() {
+      rafRef.current = null
+      if (pendingPoint.current) setCursor(pendingPoint.current)
+    }
+
+    function handleMove(e) {
+      pendingPoint.current = toSvgPoint(e.clientX, e.clientY)
+      if (rafRef.current === null) rafRef.current = requestAnimationFrame(flush)
+    }
+
+    function handleLeave() {
+      pendingPoint.current = null
+      setCursor(null)
+    }
+
+    svg.addEventListener('mousemove', handleMove)
+    svg.addEventListener('mouseleave', handleLeave)
+    return () => {
+      svg.removeEventListener('mousemove', handleMove)
+      svg.removeEventListener('mouseleave', handleLeave)
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [svgRef, enabled])
+
+  const offsets = useMemo(() => {
+    const map = {}
+    if (!cursor) return map
+
+    nodes.forEach((node) => {
+      const dx = node.x - cursor.x
+      const dy = node.y - cursor.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist >= radius || dist === 0) return
+
+      const falloff = 1 - dist / radius // 0..1, stronger when closer
+      const eased = falloff * falloff // ease-in, calm at the edge of the radius
+      const nx = dx / dist
+      const ny = dy / dist
+
+      map[node.id] = {
+        offsetX: nx * eased * MAX_OFFSET,
+        offsetY: ny * eased * MAX_OFFSET,
+        scale: 1 + eased * MAX_SCALE_BOOST,
+      }
+    })
+
+    return map
+  }, [cursor, nodes, radius])
+
+  return offsets
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\hooks\useGraphFocus.js ====================
+
+import { useMemo } from 'react'
+import { findNodeById, getNeighborhood } from '../utils/graphUtils'
+
+const MAX_SHIFT = 55 // px — how far the whole graph may drift toward centering the focal node
+const SHIFT_LERP = 0.4 // how much of the "full recenter" distance to actually take (partial, not total)
+const EXPAND_PUSH = 24 // px a direct neighbor moves away from the focal node
+const RECEDE_PUSH = 6 // px an unrelated node drifts further away, reinforcing "focus" without a full re-layout
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v))
+}
+
+/**
+ * Computes the visual consequence of "focus mode" for a selected node,
+ * without a full force-directed re-layout (which would be unpredictable
+ * with a hand-positioned graph). Instead:
+ *  - the whole graph nudges partway toward centering the focal node
+ *    (clamped so nothing risks clipping outside the viewBox)
+ *  - direct neighbors spread outward from the focal node
+ *  - everything else recedes very slightly, reinforcing depth
+ * The result reads as "the ecosystem reorganized around this entity"
+ * while staying deterministic and safe to render at any viewport.
+ */
+export function useGraphFocus(nodes, edges, focusNodeId, viewW, viewH) {
+  return useMemo(() => {
+    if (!focusNodeId) return { groupOffset: { x: 0, y: 0 }, nodeOffsets: {}, focalNode: null }
+
+    const focalNode = findNodeById(nodes, focusNodeId)
+    if (!focalNode) return { groupOffset: { x: 0, y: 0 }, nodeOffsets: {}, focalNode: null }
+
+    const fullShiftX = viewW / 2 - focalNode.x
+    const fullShiftY = viewH / 2 - focalNode.y
+    const groupOffset = {
+      x: clamp(fullShiftX * SHIFT_LERP, -MAX_SHIFT, MAX_SHIFT),
+      y: clamp(fullShiftY * SHIFT_LERP, -MAX_SHIFT, MAX_SHIFT),
+    }
+
+    const { nodeIds } = getNeighborhood(edges, focusNodeId)
+    const nodeOffsets = {}
+
+    nodes.forEach((n) => {
+      if (n.id === focusNodeId) return
+      const dx = n.x - focalNode.x
+      const dy = n.y - focalNode.y
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1
+      const nx = dx / dist
+      const ny = dy / dist
+      const isNeighbor = nodeIds.has(n.id)
+      const push = isNeighbor ? EXPAND_PUSH : RECEDE_PUSH // both move outward from the focal node; unrelated nodes just move less
+      nodeOffsets[n.id] = { x: nx * push, y: ny * push }
+    })
+
+    return { groupOffset, nodeOffsets, focalNode }
+  }, [nodes, edges, focusNodeId, viewW, viewH])
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\hooks\useReducedMotion.js ====================
+
+import { useEffect, useState } from 'react'
+
+/**
+ * Tracks the user's prefers-reduced-motion setting so ambient graph motion
+ * (drift, cursor proximity, breathing halos) can be disabled outright
+ * rather than just slowed down.
+ */
+export function useReducedMotion() {
+  const [reduced, setReduced] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const handler = (e) => setReduced(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
+
+  return reduced
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\services\aiService.js ====================
+
+// PHASE 5 — AI Intelligence Layer
+//
+// Not implemented in Phase 1. Will handle natural language interpretation
+// of free-text Ask NEXUS queries and generate explanation copy for the
+// Intelligence panel. Phase 1's Ask NEXUS command bar uses controlled
+// scenario matching only (see src/data/scenarios.js).
+
+export async function interpretQuery() {
+  throw new Error('aiService.interpretQuery is implemented in Phase 5.')
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\services\razorpayService.js ====================
+
+// PHASE 4 — Razorpay Economic Signal Layer
+//
+// Not implemented in Phase 1. Will connect to Razorpay test mode (Orders,
+// Payments APIs) to feed real payment success/failure, refund, and volume
+// signals into the Business Digital Twin. Phase 1 uses structured mock
+// data from src/data/mockTransactions.js that mirrors this future shape.
+
+export async function fetchPaymentSignals() {
+  throw new Error('razorpayService.fetchPaymentSignals is implemented in Phase 4.')
+}
+
+export async function fetchRecentTransactions() {
+  throw new Error('razorpayService.fetchRecentTransactions is implemented in Phase 4.')
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\utils\constants.js ====================
+
+// Shared enums and design tokens referenced across data, engine, and UI layers.
+
+export const NODE_TYPES = {
+  SUPPLIER: 'supplier',
+  PRODUCT: 'product',
+  BUNDLE: 'bundle',
+  CUSTOMER_COHORT: 'customer_cohort',
+  REVENUE: 'revenue',
+  SIGNAL: 'signal', // Razorpay economic signal layer
+}
+
+export const HEALTH = {
+  HEALTHY: 'healthy',
+  WARNING: 'warning',
+  CRITICAL: 'critical',
+}
+
+export const HEALTH_COLOR = {
+  [HEALTH.HEALTHY]: '#62c98b',
+  [HEALTH.WARNING]: '#ffb347',
+  [HEALTH.CRITICAL]: '#ff5c4d',
+}
+
+export const HEALTH_SOFT_COLOR = {
+  [HEALTH.HEALTHY]: 'rgba(98, 201, 139, 0.14)',
+  [HEALTH.WARNING]: 'rgba(255, 179, 71, 0.14)',
+  [HEALTH.CRITICAL]: 'rgba(255, 92, 77, 0.14)',
+}
+
+// LIME is the NEXUS signature color — reserved for active/live/selected
+// states only (per design system rule: used sparingly, never decorative).
+// INTELLIGENCE (violet) marks anything the NEXUS AI itself is surfacing —
+// insights, the AI brain, Razorpay economic signal edges, command bar.
+export const ACCENT = {
+  LIME: '#c6ff3b',
+  INTELLIGENCE: '#8b7cff',
+}
+
+// Visual importance drives node radius + label weight in the twin graph.
+export const NODE_IMPORTANCE = {
+  MINOR: 'minor',
+  STANDARD: 'standard',
+  MAJOR: 'major',
+  HERO: 'hero',
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\utils\formatters.js ====================
+
+// Formatting helpers tuned for Indian merchant context (₹, lakhs).
+
+export function formatINRLakhs(value) {
+  // value expected in raw rupees
+  const lakhs = value / 100000
+  return `₹${lakhs.toFixed(2)}L`
+}
+
+export function formatINR(value) {
+  return `₹${value.toLocaleString('en-IN')}`
+}
+
+export function formatPercent(value, opts = {}) {
+  const { showSign = false, decimals = 1 } = opts
+  const sign = showSign && value > 0 ? '+' : ''
+  return `${sign}${value.toFixed(decimals)}%`
+}
+
+export function clampPercent(value) {
+  return Math.max(0, Math.min(100, value))
+}
+
+
+
+==================== FILE: C:\Users\DELL\desktop\nexus-graph-redesign\src\utils\graphUtils.js ====================
+
+// Lightweight graph traversal helpers over the { nodes, edges } business graph shape.
+// Kept intentionally simple in Phase 1 — the full dependency traversal engine
+// (multi-hop weighting, cascade simulation) arrives in Phase 2.
+
+/** Returns edge ids directly touching a node (either direction). */
+export function getDirectEdges(edges, nodeId) {
+  return edges.filter((e) => e.source === nodeId || e.target === nodeId)
+}
+
+/** Returns node ids immediately upstream (feeding into) a node. */
+export function getUpstreamNodeIds(edges, nodeId) {
+  return edges.filter((e) => e.target === nodeId).map((e) => e.source)
+}
+
+/** Returns node ids immediately downstream (fed by) a node. */
+export function getDownstreamNodeIds(edges, nodeId) {
+  return edges.filter((e) => e.source === nodeId).map((e) => e.target)
+}
+
+/**
+ * Returns the set of node ids and edge ids that should be visually
+ * highlighted when a given node is hovered/focused: the node itself,
+ * plus its immediate upstream and downstream neighbors and connecting edges.
+ */
+export function getNeighborhood(edges, nodeId) {
+  const nodeIds = new Set([nodeId])
+  const edgeIds = new Set()
+
+  edges.forEach((e) => {
+    if (e.source === nodeId || e.target === nodeId) {
+      edgeIds.add(e.id)
+      nodeIds.add(e.source)
+      nodeIds.add(e.target)
+    }
+  })
+
+  return { nodeIds, edgeIds }
+}
+
+/**
+ * Given an ordered list of node ids representing a path (e.g. a scenario's
+ * cascade path), returns the set of edge ids connecting consecutive nodes,
+ * if such edges exist in the graph.
+ */
+export function getPathEdgeIds(edges, orderedNodeIds) {
+  const edgeIds = new Set()
+  for (let i = 0; i < orderedNodeIds.length - 1; i++) {
+    const from = orderedNodeIds[i]
+    const to = orderedNodeIds[i + 1]
+    const match = edges.find(
+      (e) => (e.source === from && e.target === to) || (e.source === to && e.target === from)
+    )
+    if (match) edgeIds.add(match.id)
+  }
+  return edgeIds
+}
+
+export function findNodeById(nodes, id) {
+  return nodes.find((n) => n.id === id)
+}
+
