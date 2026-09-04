@@ -48,6 +48,9 @@ export default function BusinessGraph({ graph }) {
     setProximityAnchorId,
     revealedHiddenEdgeIds,
     scenarioHighlight,
+    simulationNodeMap,
+    simulationEdgeMap,
+    activeSimulation,
   } = graph
 
   const svgRef = useRef(null)
@@ -279,6 +282,7 @@ export default function BusinessGraph({ graph }) {
                     particleSeed={i}
                     reducedMotion={reducedMotion}
                     hiddenRevealed={revealedHiddenEdgeIds.has(edge.id)}
+                    simEdgeState={simulationEdgeMap?.get(edge.id)}
                   />
                 )
               })}
@@ -309,6 +313,7 @@ export default function BusinessGraph({ graph }) {
                     isCascadeActive={cascadeActiveNodeIds.has(node.id)}
                     justArrived={justArrivedId === node.id}
                     constellationPlacements={selectedNode?.id === node.id ? constellationByNode : null}
+                    simState={simulationNodeMap?.get(node.id)}
                   />
                 )
               })}
@@ -334,13 +339,13 @@ export default function BusinessGraph({ graph }) {
 
         <div className="twin-legend">
           <span className="legend-item">
-            <span className="legend-dot" style={{ background: '#62c98b' }} /> Healthy
+            <span className="legend-dot" style={{ background: '#62c98b' }} /> Healthy / Protected
           </span>
           <span className="legend-item">
-            <span className="legend-dot" style={{ background: '#ffb347' }} /> Watch
+            <span className="legend-dot" style={{ background: '#ffb347' }} /> Watch / Exposed
           </span>
           <span className="legend-item">
-            <span className="legend-dot" style={{ background: '#ff5c4d' }} /> Critical
+            <span className="legend-dot" style={{ background: '#ff5c4d' }} /> Critical Exposure
           </span>
           <span className="legend-item">
             <span className="legend-dot" style={{ background: '#8b7cff' }} /> NEXUS Intelligence

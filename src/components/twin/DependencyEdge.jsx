@@ -53,6 +53,7 @@ export default function DependencyEdge({
   travelDur = 0.5,
   focusDirection,
   hiddenRevealed = false,
+  simEdgeState = null,
 }) {
   const curve = useMemo(() => buildCurve(sourceNode, targetNode, edge.id), [sourceNode, targetNode, edge.id])
   const baseColor = EDGE_COLOR[edge.kind] || EDGE_COLOR.standard
@@ -62,8 +63,12 @@ export default function DependencyEdge({
   const strength = edge.strength ?? 0.4
   const restingWidth = 0.7 + strength * 2.1
 
+  const isCorridorActive = Boolean(simEdgeState?.isCorridorActive || isCascadeActive || isTraveling)
+  const isCriticalCorridor = Boolean(simEdgeState?.isCritical)
+
   let color = baseColor
-  if (isCascadeActive || isTraveling) color = 'var(--status-critical)'
+  if (simEdgeState?.color) color = simEdgeState.color
+  else if (isCascadeActive || isTraveling) color = 'var(--status-critical)'
   else if (isHiddenEdge && hiddenRevealed) color = ACCENT.INTELLIGENCE
   else if (!isHiddenEdge && isHighlighted && focusDirection === 'in') color = 'var(--status-warning)'
   else if (!isHiddenEdge && isHighlighted && focusDirection === 'out') color = ACCENT.LIME
@@ -72,10 +77,11 @@ export default function DependencyEdge({
     !reducedMotion &&
     !isHiddenEdge &&
     !isTraveling &&
+    !isCorridorActive &&
     (edge.kind === 'critical' || edge.kind === 'signal') &&
     opacity > 0.15
 
-  const strokeW = isTraveling || isCascadeActive ? restingWidth + 1.1 : isHighlighted ? restingWidth + 0.4 : restingWidth
+  const strokeW = simEdgeState?.strokeWidth || (isTraveling || isCascadeActive ? restingWidth + 1.1 : isHighlighted ? restingWidth + 0.4 : restingWidth)
 
   return (
     <g className="dep-edge-group" opacity={opacity} style={{ transition: 'opacity 0.45s ease' }}>
@@ -93,6 +99,41 @@ export default function DependencyEdge({
         }}
       />
 
+      {/* Animated streaming dash flow along the active corridor path */}
+      {isCorridorActive && (
+        <path
+          d={curve.d}
+          stroke={color}
+          fill="none"
+          strokeWidth={strokeW + 0.6}
+          strokeDasharray={isCriticalCorridor ? '8 6' : '5 7'}
+          strokeLinecap="round"
+          opacity={0.9}
+        >
+          <animate
+            attributeName="stroke-dashoffset"
+            from={isCriticalCorridor ? '28' : '24'}
+            to="0"
+            dur={simEdgeState?.flowSpeed || (isCriticalCorridor ? '0.7s' : '1.3s')}
+            repeatCount="indefinite"
+          />
+        </path>
+      )}
+
+      {/* Active traveling courier particle along the corridor */}
+      {isCorridorActive && !reducedMotion && (
+        <circle r={isCriticalCorridor ? 3.4 : 2.5} fill={color} opacity={0.95} className="cascade-courier">
+          <animateMotion
+            dur={simEdgeState?.courierSpeed || (isCriticalCorridor ? '1.0s' : '1.7s')}
+            repeatCount="indefinite"
+            keyPoints="0;1"
+            keyTimes="0;1"
+          >
+            <mpath href={`#${pathId}`} />
+          </animateMotion>
+        </circle>
+      )}
+
       {showIdleParticle && particleSeed % 2 === 0 && (
         <circle r={1.7} fill={color} className="flow-particle" opacity={0.7}>
           <animateMotion dur={`${5.2 + (particleSeed % 4) * 0.7}s`} repeatCount="indefinite" begin={`${(particleSeed % 5) * 1.1}s`}>
@@ -101,7 +142,7 @@ export default function DependencyEdge({
         </circle>
       )}
 
-      {isTraveling && !reducedMotion && (
+      {isTraveling && !reducedMotion && !isCorridorActive && (
         <circle r={4} fill={color} className="cascade-courier">
           <animateMotion dur={`${Math.max(0.35, travelDur)}s`} fill="freeze" keyPoints="0;1" keyTimes="0;1">
             <mpath href={`#${pathId}`} />

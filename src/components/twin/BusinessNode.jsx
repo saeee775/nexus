@@ -60,6 +60,7 @@ export default function BusinessNode({
   isCascadeActive = false,
   justArrived = false,
   constellationPlacements = null,
+  simState = null,
 }) {
   const Icon = ICON_BY_TYPE[node.type]
   const isSignal = node.type === NODE_TYPES.SIGNAL
@@ -69,14 +70,24 @@ export default function BusinessNode({
   const isRevenue = node.type === NODE_TYPES.REVENUE
   const isCohort = node.type === NODE_TYPES.CUSTOMER_COHORT
   const r = isSignal ? 11 : RADIUS_BY_IMPORTANCE[node.importance] || 22
-  const healthColor = HEALTH_COLOR[node.health]
+  const healthColor = simState?.color || HEALTH_COLOR[node.health]
   const ringColor = isSignal ? ACCENT.INTELLIGENCE : healthColor
   const selectionColor = ACCENT.LIME
-  const emphasized = isSelected || isHovered || isCascadeActive || justArrived
+
+  const isSimProtected = simState?.isProtected
+  const isSimExposed = simState?.isExposed
+  const isSimCritical = simState?.isCritical
+  const emphasized = isSelected || isHovered || isCascadeActive || justArrived || isSimExposed || isSimProtected
 
   const bodyGlow =
     isSelected
       ? `drop-shadow(0 0 10px ${selectionColor}50)`
+      : isSimCritical
+      ? `drop-shadow(0 0 14px rgba(255, 92, 77, 0.85))`
+      : isSimExposed
+      ? `drop-shadow(0 0 10px rgba(255, 179, 71, 0.75))`
+      : isSimProtected
+      ? `drop-shadow(0 0 8px rgba(98, 201, 139, 0.6))`
       : justArrived || isCascadeActive
       ? `drop-shadow(0 0 8px ${healthColor}55)`
       : isHovered
@@ -249,8 +260,53 @@ export default function BusinessNode({
           />
         )}
 
-        {justArrived && !reducedMotion && (
-          <circle className="cascade-pulse-ring" r={r} fill="none" stroke={healthColor} strokeWidth={1.8} style={{ '--pulse-r0': r }} />
+        {/* Protected buffer shield halo */}
+        {isSimProtected && (
+          <circle
+            r={r + 5}
+            fill="none"
+            stroke="#62c98b"
+            strokeWidth={1.4}
+            strokeDasharray="4 3"
+            opacity={0.8}
+          />
+        )}
+
+        {/* Simulation status pill badge above node */}
+        {simState?.statusLabel && (
+          <g transform={`translate(0, ${-r - 14})`}>
+            <rect
+              x={-30}
+              y={-7}
+              width={60}
+              height={14}
+              rx={3}
+              fill={isSimCritical ? 'rgba(255, 92, 77, 0.95)' : isSimProtected ? 'rgba(35, 134, 54, 0.95)' : 'rgba(210, 153, 34, 0.95)'}
+              stroke={isSimCritical ? '#ff5c4d' : isSimProtected ? '#62c98b' : '#ffb347'}
+              strokeWidth={0.8}
+            />
+            <text
+              textAnchor="middle"
+              y={3.5}
+              fill="#ffffff"
+              fontSize={7.5}
+              fontWeight={700}
+              letterSpacing="0.05em"
+            >
+              {simState.statusLabel}
+            </text>
+          </g>
+        )}
+
+        {(justArrived || ((isSimCritical || isSimExposed) && !reducedMotion)) && (
+          <circle
+            className="cascade-pulse-ring"
+            r={r}
+            fill="none"
+            stroke={healthColor}
+            strokeWidth={isSimCritical ? 2.2 : 1.6}
+            style={{ '--pulse-r0': r }}
+          />
         )}
 
         {!isCohort && (

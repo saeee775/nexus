@@ -27,11 +27,7 @@ export default function App() {
         hops: scenario.hops || simulation?.hops,
       }
       setActiveScenario(enrichedScenario)
-      graph.applyScenarioHighlight(
-        enrichedScenario.affectedNodeIds,
-        enrichedScenario.focusNodeId || scenario.focusNodeId,
-        enrichedScenario.hops
-      )
+      graph.applyScenarioSimulation(enrichedScenario.simulation)
     },
     [graph]
   )
@@ -39,7 +35,7 @@ export default function App() {
   const handleClearScenario = useCallback(() => {
     setActiveScenario(null)
     setQuery('')
-    graph.clearScenarioHighlight()
+    graph.applyScenarioSimulation(null)
     graph.clearSelection()
   }, [graph])
 
@@ -50,6 +46,7 @@ export default function App() {
     (nodeId) => {
       setActiveScenario(null)
       setQuery('')
+      graph.applyScenarioSimulation(null)
       graph.selectNode(nodeId)
     },
     [graph]
@@ -59,8 +56,18 @@ export default function App() {
   // on Product X without going through the scenario/simulation flow.
   const handleViewDependency = useCallback(
     (nodeId) => {
-      graph.clearScenarioHighlight()
+      graph.applyScenarioSimulation(null)
       graph.selectNode(nodeId)
+    },
+    [graph]
+  )
+
+  // Shock Replay timeline scrub dynamically re-highlights the Digital Twin
+  // in lockstep with the time-sliced simulation cascade.
+  const handleTimelineHighlight = useCallback(
+    (timelineSim) => {
+      if (!timelineSim) return
+      graph.applyScenarioSimulation(timelineSim)
     },
     [graph]
   )
@@ -81,6 +88,7 @@ export default function App() {
           selectedNode={graph.selectedNode}
           onViewDependency={handleViewDependency}
           onClearScenario={handleClearScenario}
+          onTimelineChange={handleTimelineHighlight}
         />
       </main>
       <AskNexus

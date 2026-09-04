@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { BrainCircuit } from 'lucide-react'
 import HiddenDependency from './HiddenDependency'
 import SimulationResult from './SimulationResult'
@@ -6,20 +6,37 @@ import NodeObservation from './NodeObservation'
 import RiskPanel from '../dashboard/RiskPanel'
 import { cascadeRisk } from '../../data/businessData'
 
-export default function InsightPanel({ activeScenario, selectedNode, onViewDependency, onClearScenario }) {
+export default function InsightPanel({
+  activeScenario,
+  selectedNode,
+  onViewDependency,
+  onClearScenario,
+  onTimelineChange,
+}) {
   const [selectedInterventionId, setSelectedInterventionId] = useState(null)
+  const [timelineSim, setTimelineSim] = useState(null)
 
-  // Reset selected intervention whenever scenario changes
+  // Reset selected intervention and timeline state whenever scenario changes
   useEffect(() => {
     setSelectedInterventionId(activeScenario?.simulation?.recommendation?.interventionId || null)
+    setTimelineSim(null)
   }, [activeScenario?.id])
 
-  const simulationRisk = activeScenario?.simulation?.cascadeRisk
-  const interventions = activeScenario?.simulation?.interventions || []
+  const handleTimelineChange = useCallback(
+    (sim) => {
+      setTimelineSim(sim)
+      onTimelineChange?.(sim)
+    },
+    [onTimelineChange]
+  )
+
+  const currentSim = timelineSim || activeScenario?.simulation
+  const simulationRisk = currentSim?.cascadeRisk
+  const interventions = currentSim?.interventions || []
 
   const activeIntervention =
     interventions.find((i) => i.id === selectedInterventionId) ||
-    activeScenario?.simulation?.recommendation
+    currentSim?.recommendation
 
   const riskScore = activeIntervention?.residualSeverity !== undefined
     ? activeIntervention.residualSeverity
@@ -56,6 +73,7 @@ export default function InsightPanel({ activeScenario, selectedNode, onViewDepen
               onClear={onClearScenario}
               selectedInterventionId={selectedInterventionId}
               onSelectIntervention={setSelectedInterventionId}
+              onTimelineChange={handleTimelineChange}
             />
           ) : selectedNode ? (
             <NodeObservation node={selectedNode} />

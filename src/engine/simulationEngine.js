@@ -231,10 +231,27 @@ export function runSimulation(disruptionOrScenario, options = {}) {
       preview: { headline: 'No disruption simulated', body: 'No valid business node identified for simulation.', impact: '₹0 exposure', confidence: 'low' },
       cascadeRisk: { score: 0, max: 100, label: 'No vulnerability', steps: [] },
       hops: [],
+      timeline: { totalDays: 10, currentDay: 10, stockDays: 6, deficitDays: 4 },
     }
   }
 
   const startNode = getNode(nodes, event.nodeId)
+
+  // Disruption timeline duration
+  const totalDays = event.type === 'supplier_delay'
+    ? (event.delayDays ?? 10)
+    : event.type === 'product_unavailable'
+    ? 14
+    : event.type === 'payment_failure'
+    ? 14
+    : 10
+
+  const requestedDay = options.currentDay !== undefined
+    ? options.currentDay
+    : disruptionOrScenario?.currentDay
+  const elapsedDays = requestedDay !== undefined
+    ? Math.max(0, Math.min(totalDays, Number(requestedDay)))
+    : totalDays
 
   // 1. Graph Traversal: Directed downstream dependencies
   const traversal = traverseDependencies({
@@ -251,7 +268,9 @@ export function runSimulation(disruptionOrScenario, options = {}) {
   const productX = getNode(nodes, 'product-x')
   const productY = getNode(nodes, 'product-y')
   const sharedInv = getNode(nodes, 'shared-inventory')
-  const startNodeStock = typeof startNode.metrics?.stockDaysLeft === 'number' ? startNode.metrics.stockDaysLeft : null
+  const productXStock = productX?.metrics?.stockDaysLeft ?? 6
+  const productYStock = productY?.metrics?.stockDaysLeft ?? 28
+  const sharedInvStock = sharedInv?.metrics?.stockDaysLeft ?? 9
 
   // 2. Identify Cohorts and Core Nodes with Inventory-Aware Propagation
   const reachedCohorts = []
@@ -283,7 +302,7 @@ export function runSimulation(disruptionOrScenario, options = {}) {
     let nodeDeficitDays = 0
 
     if (event.type === 'supplier_delay') {
-      const delayDays = event.delayDays ?? 10
+      const delayDays = elapsedDays
 
       if (n.type === NODE_TYPES.PRODUCT) {
         const stockDays = n.metrics?.stockDaysLeft ?? 0
@@ -292,16 +311,15 @@ export function runSimulation(disruptionOrScenario, options = {}) {
 
         if (deficit <= 0) {
           exposureClass = 'buffer-protected'
-          impactReason = `Stock cover (${stockDays}d) fully absorbs ${delayDays}d delay (buffer-protected)`
+          impactReason = `Stock cover (${stockDays}d) fully absorbs Day ${delayDays} delay (${stockDays - delayDays}d buffer remaining)`
           nodeSeverity = 10
         } else {
-          exposureClass = deficit >= delayDays * 0.5 ? 'fully_exposed' : 'partially_exposed'
-          impactReason = `Stock cover (${stockDays}d) exhausted with ${deficit}d deficit`
-          nodeSeverity = Math.min(100, Math.round(dep.strength * 80 + (deficit / delayDays) * 20))
+          exposureClass = deficit >= totalDays * 0.5 ? 'fully_exposed' : 'partially_exposed'
+          impactReason = `Stock cover (${stockDays}d) exhausted with ${deficit}d stockout deficit`
+          nodeSeverity = Math.min(100, Math.round(dep.strength * 80 + (deficit / totalDays) * 20))
         }
       } else {
         // Downstream entities: check if intermediate inventory along path absorbed the disruption
-        // Path trace: does this path flow through a buffer-protected product?
         const pathHasBufferProtected = dep.path.some((stepId) => {
           if (stepId === event.nodeId || stepId === n.id) return false
           const intermediateDetail = nodeImpactMap.get(stepId)
@@ -313,13 +331,12 @@ export function runSimulation(disruptionOrScenario, options = {}) {
           impactReason = 'Disruption fully absorbed by upstream product inventory buffer'
           nodeSeverity = 10
         } else {
-          // Check Product X deficit for paths through Product X
-          const prodXDeficit = Math.max(0, delayDays - (productX?.metrics?.stockDaysLeft ?? 6))
-          const deficitRatio = delayDays > 0 ? prodXDeficit / delayDays : 0
+          const prodXDeficit = Math.max(0, delayDays - productXStock)
+          const deficitRatio = totalDays > 0 ? prodXDeficit / totalDays : 0
 
           if (deficitRatio <= 0) {
             exposureClass = 'buffer-protected'
-            impactReason = `Protected by Product X stock buffer (${productX?.metrics?.stockDaysLeft ?? 6}d cover)`
+            impactReason = `Protected by Product X stock buffer (${productXStock}d cover)`
             nodeSeverity = 10
           } else {
             exposureClass = deficitRatio >= 0.5 ? 'fully_exposed' : 'partially_exposed'
@@ -345,28 +362,32 @@ export function runSimulation(disruptionOrScenario, options = {}) {
         }
       }
     } else if (event.type === 'product_unavailable') {
+      const timeRatio = totalDays > 0 ? Math.min(1, Math.max(0.15, (elapsedDays + 1) / totalDays)) : 1
       if (n.type === NODE_TYPES.BUNDLE) {
         impactReason = `Bundle margin (${n.metrics?.margin || 0}%) at risk from core SKU removal`
-        nodeSeverity = Math.min(100, Math.round(dep.strength * 95))
-        exposureClass = 'fully_exposed'
+        nodeSeverity = Math.round(dep.strength * 95 * timeRatio)
+        exposureClass = timeRatio >= 0.5 ? 'fully_exposed' : 'partially_exposed'
       } else if (n.type === NODE_TYPES.CUSTOMER_COHORT) {
         impactReason = `${n.metrics?.revenueShare || 0}% revenue share cohort exposed (${n.metrics?.cohortSize || 0} customers)`
         exposureClass = 'partially_exposed'
+        nodeSeverity = Math.round(dep.strength * 80 * timeRatio)
         reachedCohorts.push({
           id: n.id,
           label: n.label,
           cohortSize: n.metrics?.cohortSize || 0,
           revenueShare: n.metrics?.revenueShare || 0,
           avgOrderValue: n.metrics?.avgOrderValue || '₹0',
-          impactedMembers: Math.round((n.metrics?.cohortSize || 0) * (dep.strength * 0.7)),
-          riskLevel: dep.strength > 0.6 ? 'critical' : 'warning',
+          impactedMembers: Math.round((n.metrics?.cohortSize || 0) * (dep.strength * 0.7 * timeRatio)),
+          riskLevel: dep.strength * timeRatio > 0.5 ? 'critical' : 'warning',
         })
       } else if (n.type === NODE_TYPES.REVENUE) {
         impactReason = 'Downstream revenue line unfulfilled without SKU substitute'
         exposureClass = 'partially_exposed'
+        nodeSeverity = Math.round(dep.strength * 85 * timeRatio)
       }
     } else if (event.type === 'payment_failure') {
       const dropPct = Math.round((event.failureRateDelta || 0.15) * 100)
+      const timeRatio = totalDays > 0 ? Math.min(1, Math.max(0.15, (elapsedDays + 1) / totalDays)) : 1
       if (n.type === NODE_TYPES.SIGNAL) {
         impactReason = `Checkout flow conversion degrades by ~${dropPct}%`
         exposureClass = 'partially_exposed'
@@ -374,11 +395,11 @@ export function runSimulation(disruptionOrScenario, options = {}) {
       } else if (n.type === NODE_TYPES.BUNDLE) {
         impactReason = `High-ticket bundle cart abandonment rises from payment drop-off`
         exposureClass = 'partially_exposed'
-        nodeSeverity = Math.round(dep.strength * 70)
+        nodeSeverity = Math.round(dep.strength * 70 * timeRatio)
       } else if (n.type === NODE_TYPES.REVENUE) {
         impactReason = `Monthly settled transaction volume leaks ~${dropPct}%`
         exposureClass = 'partially_exposed'
-        nodeSeverity = Math.round(dep.strength * 75)
+        nodeSeverity = Math.round(dep.strength * 75 * timeRatio)
       }
     } else {
       // Generic disruption
@@ -423,13 +444,14 @@ export function runSimulation(disruptionOrScenario, options = {}) {
   let revenueExposurePercent = 0
   let headline = ''
   let body = ''
+  let causalExplanation = ''
   let impactBadge = ''
   let confidence = 'high'
   let causalSteps = []
 
   if (event.type === 'supplier_delay') {
-    const stockDays = productX?.metrics?.stockDaysLeft ?? 6
-    const delayDays = event.delayDays ?? 10
+    const stockDays = productXStock
+    const delayDays = elapsedDays
     const deficitDays = Math.max(0, delayDays - stockDays)
     const vipCohort = getNode(nodes, 'vip-customers')
     const vipShare = vipCohort?.metrics?.revenueShare ?? 42
@@ -445,28 +467,32 @@ export function runSimulation(disruptionOrScenario, options = {}) {
     revenueExposureINR = Math.round((vipMonthlyRevenue * cycleDeficitRatio * bundleConcentration * pathAttenuation) / 10000) * 10000
     revenueExposurePercent = Math.round((revenueExposureINR / baselineRevenue) * 1000) / 10
 
+    const causalExplanation = deficitDays > 0
+      ? `Product X became exposed because its available stock (${stockDays}d) no longer covers the remaining supplier delay (${delayDays}d elapsed, creating a ${deficitDays}-day deficit). The exposure propagated to Premium Bundle through Product X, and revenue exposure increased to ${formatCurrencyINR(revenueExposureINR)} because Premium Bundle serves the exposed VIP customer cohort.`
+      : `The disruption has not exhausted Product X’s inventory buffer yet (${stockDays - delayDays} days of stock remaining). Product X remains protected; downstream Premium Bundle and VIP customer cohorts have 0 exposure.`
+
     if (deficitDays > 0) {
-      headline = `${startNode.label} delay → cascading exposure`
-      body = `A ${delayDays}-day delay drains Product X stock cover (${stockDays}d) resulting in a ${deficitDays}-day stockout deficit, disrupting Premium Bundle availability for the VIP cohort.`
+      headline = `Day ${delayDays}: Stockout deficit (${deficitDays}d) breaches buffer`
+      body = `Product X stock (${stockDays}d) exhausted at Day ${stockDays}. At Day ${delayDays}, a ${deficitDays}-day deficit exposes ${formatCurrencyINR(revenueExposureINR)} across the VIP customer cohort.`
       impactBadge = `${formatCurrencyINR(revenueExposureINR)} estimated revenue exposure`
       confidence = 'high'
 
       causalSteps = [
-        { text: `${startNode.label} delayed by ${delayDays} days`, emphasis: false },
+        { text: `${startNode.label} delayed through Day ${delayDays} of ${totalDays}`, emphasis: false },
         { text: `Inventory cover exhausted (${stockDays}d cover vs ${delayDays}d delay: ${deficitDays}d deficit)`, emphasis: false },
         { text: 'Premium Bundle availability blocked', emphasis: false },
         { text: `VIP customer cohort exposure (${vipShare}% revenue share)`, emphasis: false },
         { text: `${formatCurrencyINR(revenueExposureINR)} estimated revenue exposure`, emphasis: true },
       ]
     } else {
-      headline = `${startNode.label} delay absorbed by stock buffer`
-      body = `A ${delayDays}-day delay is fully buffered by Product X stock cover (${stockDays}d), resulting in 0-day stockout deficit and no VIP cohort disruption.`
+      headline = `Day ${delayDays}: Disruption buffered by Product X stock`
+      body = `At Day ${delayDays} of ${totalDays}, Product X stock cover (${stockDays}d) absorbs the delay (${stockDays - delayDays}d cover remaining). 0-day stockout deficit.`
       impactBadge = `₹0 estimated revenue exposure`
       confidence = 'high'
 
       causalSteps = [
-        { text: `${startNode.label} delayed by ${delayDays} days`, emphasis: false },
-        { text: `Inventory cover intact (${stockDays}d cover absorbs ${delayDays}d delay)`, emphasis: false },
+        { text: `${startNode.label} delayed through Day ${delayDays} of ${totalDays}`, emphasis: false },
+        { text: `Inventory cover intact (${stockDays - delayDays}d buffer remaining in Product X)`, emphasis: false },
         { text: 'Premium Bundle availability protected', emphasis: false },
         { text: 'VIP customer cohort demand unimpacted', emphasis: false },
         { text: '₹0 estimated revenue exposure', emphasis: true },
@@ -474,20 +500,25 @@ export function runSimulation(disruptionOrScenario, options = {}) {
     }
   } else if (event.type === 'product_unavailable') {
     const downstreamShare = startNode.metrics?.downstreamInfluence ?? 31
+    const timeRatio = totalDays > 0 ? Math.min(1, Math.max(0.15, (elapsedDays + 1) / totalDays)) : 1
 
-    revenueExposurePercent = downstreamShare
-    revenueExposureINR = Math.round((baselineRevenue * (downstreamShare / 100)) / 1000) * 1000
+    revenueExposureINR = Math.round((baselineRevenue * (downstreamShare / 100) * timeRatio) / 1000) * 1000
+    revenueExposurePercent = Math.round((revenueExposureINR / baselineRevenue) * 1000) / 10
 
-    headline = `${startNode.label} removal → bundle collapse risk`
-    body = `Premium Bundle loses its core component (${startNode.label}). Without a substitute, VIP purchase rate for the bundle falls sharply.`
+    const causalExplanation = elapsedDays === 0
+      ? `Product X discontinued at Day 0. Immediate removal breaks the bill-of-materials for Premium Bundle, while customer backlog temporarily buffers initial revenue loss.`
+      : `The exposure propagated to Premium Bundle through Product X discontinuation. Revenue exposure increased to ${formatCurrencyINR(revenueExposureINR)} because the affected bundle serves the exposed VIP customer cohort whose demand cannot be fulfilled without a substitute.`
+
+    headline = `Day ${elapsedDays}: ${startNode.label} removal → progressive demand erosion`
+    body = `At Day ${elapsedDays} of ${totalDays}: VIP conversion leakage accumulates to ${formatCurrencyINR(revenueExposureINR)} without an active SKU substitute.`
     impactBadge = `${formatCurrencyINR(revenueExposureINR)} estimated revenue exposure`
     confidence = 'high'
 
     causalSteps = [
-      { text: `${startNode.label} discontinued`, emphasis: false },
-      { text: 'Premium Bundle loses core component', emphasis: false },
+      { text: `${startNode.label} discontinued at Day 0`, emphasis: false },
+      { text: `Premium Bundle loses core component (Day ${elapsedDays} of ${totalDays})`, emphasis: false },
       { text: 'Addon & VIP purchase conversion halts', emphasis: false },
-      { text: 'VIP customer cohort demand leakage', emphasis: false },
+      { text: 'VIP customer cohort demand leakage accumulates', emphasis: false },
       { text: `${formatCurrencyINR(revenueExposureINR)} estimated revenue exposure`, emphasis: true },
     ]
   } else if (event.type === 'payment_failure') {
@@ -495,28 +526,36 @@ export function runSimulation(disruptionOrScenario, options = {}) {
     const failureDelta = event.failureRateDelta || 0.15
     const checkoutBundleEdge = edges.find((e) => e.source === 'checkout-flow' && e.target === 'premium-bundle')
     const checkoutStrength = checkoutBundleEdge ? edgeStrength(checkoutBundleEdge) : 0.48
+    const timeRatio = totalDays > 0 ? Math.min(1, Math.max(0.15, (elapsedDays + 1) / totalDays)) : 1
 
-    revenueExposureINR = Math.round((baselineRevenue * failureDelta * checkoutStrength) / 10000) * 10000
+    revenueExposureINR = Math.round((baselineRevenue * failureDelta * checkoutStrength * timeRatio) / 10000) * 10000
     revenueExposurePercent = Math.round((revenueExposureINR / baselineRevenue) * 1000) / 10
 
-    headline = 'Payment friction → checkout leakage'
-    body = `A ${dropPct}% drop in Razorpay payment success rate increases checkout abandonment on Premium Bundle purchases.`
+    const causalExplanation = elapsedDays === 0
+      ? `Razorpay payment failure spike of +${dropPct}% begins at Day 0. Immediate customer checkout retries absorb initial friction before cart abandonment compounds.`
+      : `The exposure propagated from Razorpay payment failures directly into Checkout Flow and Premium Bundle conversions. Revenue exposure increased to ${formatCurrencyINR(revenueExposureINR)} because elevated transaction drop-off prevents VIP customers from completing high-ticket checkout.`
+
+    headline = `Day ${elapsedDays}: Payment friction → transaction leakage`
+    body = `At Day ${elapsedDays} of ${totalDays}: A ${dropPct}% drop in Razorpay success rate leads to ${formatCurrencyINR(revenueExposureINR)} in unrealized checkout volume.`
     impactBadge = `${formatCurrencyINR(revenueExposureINR)} estimated revenue exposure`
     confidence = 'medium'
 
     causalSteps = [
-      { text: `Payment success drops ${dropPct}%`, emphasis: false },
-      { text: 'Checkout flow authorization failures increase', emphasis: false },
+      { text: `Payment success drops ${dropPct}% at Day 0`, emphasis: false },
+      { text: `Checkout authorization failures persist (Day ${elapsedDays} of ${totalDays})`, emphasis: false },
       { text: 'High-ticket Premium Bundle cart abandonment', emphasis: false },
       { text: 'Economic transaction signal attenuation', emphasis: false },
       { text: `${formatCurrencyINR(revenueExposureINR)} estimated revenue exposure`, emphasis: true },
     ]
   } else if (event.type === 'inventory_shortage') {
-    revenueExposureINR = Math.round((baselineRevenue * 0.18) / 10000) * 10000
-    revenueExposurePercent = 18
+    const timeRatio = totalDays > 0 ? Math.min(1, Math.max(0.2, (elapsedDays + 1) / totalDays)) : 1
+    revenueExposureINR = Math.round((baselineRevenue * 0.18 * timeRatio) / 10000) * 10000
+    revenueExposurePercent = Math.round((revenueExposureINR / baselineRevenue) * 1000) / 10
 
-    headline = `${startNode.label} shortage → multi-product bottleneck`
-    body = `A buffer depletion in ${startNode.label} cascades simultaneously into connected product lines, draining available stock.`
+    causalExplanation = `The buffer depletion in ${startNode.label} cascaded into dependent product assembly lines. Revenue exposure increased to ${formatCurrencyINR(revenueExposureINR)} as order fulfillment delays propagated downstream.`
+
+    headline = `Day ${elapsedDays}: ${startNode.label} shortage → multi-product bottleneck`
+    body = `A buffer depletion in ${startNode.label} cascades simultaneously into connected product lines.`
     impactBadge = `${formatCurrencyINR(revenueExposureINR)} estimated revenue exposure`
     confidence = 'high'
 
@@ -530,10 +569,13 @@ export function runSimulation(disruptionOrScenario, options = {}) {
   } else {
     const maxStrength = downstreamDeps.reduce((m, d) => Math.max(m, d.strength), 0)
     const reachCount = downstreamDeps.length
-    revenueExposureINR = Math.round((baselineRevenue * (reachCount * 0.05) * maxStrength) / 10000) * 10000
+    const timeRatio = totalDays > 0 ? Math.min(1, Math.max(0.2, (elapsedDays + 1) / totalDays)) : 1
+    revenueExposureINR = Math.round((baselineRevenue * (reachCount * 0.05) * maxStrength * timeRatio) / 10000) * 10000
     revenueExposurePercent = Math.round((revenueExposureINR / baselineRevenue) * 1000) / 10
 
-    headline = `${startNode.label} disruption → cascading effect`
+    causalExplanation = `Disruption at ${startNode.label} propagated through ${reachCount} downstream entities, resulting in ${impactBadge}.`
+
+    headline = `Day ${elapsedDays}: ${startNode.label} disruption → cascading effect`
     body = `A disruption at ${startNode.label} propagates across ${reachCount} downstream business entities.`
     impactBadge = revenueExposureINR > 0 ? `${formatCurrencyINR(revenueExposureINR)} estimated revenue exposure` : `${reachCount} nodes impacted`
     confidence = 'medium'
@@ -581,11 +623,27 @@ export function runSimulation(disruptionOrScenario, options = {}) {
     edges,
   })
 
-  // 5. Animation Hops Generation
+  // 5. Animation Hops Generation (instant 0ms hops for interactive timeline scrubbing)
   let animationHops = event.rawScenario?.hops
-  if (!animationHops || animationHops.length === 0) {
-    animationHops = hopsFromNodeIds(edges, affectedNodeIds)
+  if (!animationHops || animationHops.length === 0 || options.currentDay !== undefined) {
+    animationHops = hopsFromNodeIds(edges, affectedNodeIds, 0)
   }
+
+  // Collect node sets by exposure class
+  const bufferProtectedNodeIds = []
+  const partiallyExposedNodeIds = []
+  const fullyExposedNodeIds = []
+  const directNodeIds = [event.nodeId]
+
+  nodeImpactMap.forEach((detail, id) => {
+    if (detail.exposureClass === 'buffer-protected') {
+      bufferProtectedNodeIds.push(id)
+    } else if (detail.exposureClass === 'partially_exposed') {
+      partiallyExposedNodeIds.push(id)
+    } else if (detail.exposureClass === 'fully_exposed') {
+      fullyExposedNodeIds.push(id)
+    }
+  })
 
   // 6. Propagation Paths
   const propagationPaths = downstreamDeps
@@ -600,7 +658,7 @@ export function runSimulation(disruptionOrScenario, options = {}) {
     }))
 
   const deficitDays = event.type === 'supplier_delay'
-    ? Math.max(0, (event.delayDays ?? 10) - (productX?.metrics?.stockDaysLeft ?? 6))
+    ? Math.max(0, elapsedDays - productXStock)
     : 0
 
   const { interventions, recommendation } = generateInterventions({
@@ -615,7 +673,7 @@ export function runSimulation(disruptionOrScenario, options = {}) {
   })
 
   const supplierLeadTimeVal = parseInt(startNode.metrics?.leadTime) || 12
-  const productXStockDays = productX?.metrics?.stockDaysLeft ?? 6
+  const productXStockDays = productXStock
 
   const baseline = {
     revenueExposure: 0,
@@ -652,6 +710,11 @@ export function runSimulation(disruptionOrScenario, options = {}) {
     disruption,
     affectedNodes: affectedNodeDetails,
     affectedNodeIds,
+    exposedNodeIds: affectedNodeIds,
+    bufferProtectedNodeIds,
+    partiallyExposedNodeIds,
+    fullyExposedNodeIds,
+    directNodeIds,
     propagationPaths,
     severity: {
       score: riskScore,
@@ -667,11 +730,13 @@ export function runSimulation(disruptionOrScenario, options = {}) {
     explanation: {
       headline,
       body,
+      causalExplanation,
       summary: impactBadge,
     },
     preview: {
       headline,
       body,
+      causalExplanation,
       impact: impactBadge,
       confidence,
     },
@@ -685,5 +750,25 @@ export function runSimulation(disruptionOrScenario, options = {}) {
     recommendation,
     intervention: recommendation,
     hops: animationHops,
+    timeline: {
+      totalDays,
+      currentDay: elapsedDays,
+      stockDays: productXStock,
+      deficitDays,
+      bufferRemainingDays: event.type === 'supplier_delay' ? Math.max(0, productXStock - elapsedDays) : 0,
+      isBreached: event.type === 'supplier_delay' ? elapsedDays > productXStock : elapsedDays > 0,
+      protectedNodeCount: bufferProtectedNodeIds.length,
+      exposedNodeCount: affectedNodeIds.length,
+    },
   }
 }
+
+/**
+ * Time-aware scenario simulation helper.
+ * Computes disruption state at elapsedDays point in time.
+ * When elapsedDays equals scenario duration, matches the full simulation.
+ */
+export function simulateScenarioAtTime(scenario, elapsedDays, options = {}) {
+  return runSimulation(scenario, { ...options, currentDay: elapsedDays })
+}
+
