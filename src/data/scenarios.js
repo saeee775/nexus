@@ -1,12 +1,20 @@
 // Scenario definitions. `hops` drive the causal cascade on the Twin:
 // node arrivals and travelling-edge beats are timed independently so the
 // impact physically moves along the dependency path.
+//
+// Structured `event` parameters allow the Phase 2.2 Simulation Engine to
+// compute cascading consequences dynamically across the graph.
 
 export const scenarios = [
   {
     id: 'supplier-a-delay',
     prompt: 'Supplier A delayed by 10 days',
     query: 'What happens if Supplier A is delayed by 10 days?',
+    event: {
+      type: 'supplier_delay',
+      nodeId: 'supplier-a',
+      delayDays: 10,
+    },
     affectedNodeIds: ['supplier-a', 'shared-inventory', 'product-x', 'premium-bundle', 'vip-customers', 'revenue'],
     focusNodeId: 'supplier-a',
     hops: [
@@ -34,6 +42,11 @@ export const scenarios = [
     id: 'product-x-discontinued',
     prompt: 'Product X discontinued',
     query: 'What happens if Product X is discontinued?',
+    event: {
+      type: 'product_unavailable',
+      nodeId: 'product-x',
+      unavailabilityPct: 1,
+    },
     affectedNodeIds: ['product-x', 'premium-bundle', 'vip-customers', 'revenue'],
     focusNodeId: 'product-x',
     hops: [
@@ -57,6 +70,11 @@ export const scenarios = [
     id: 'payment-success-drop',
     prompt: 'Payment success drops 15%',
     query: 'What happens if payment success drops 15%?',
+    event: {
+      type: 'payment_failure',
+      nodeId: 'razorpay-payments',
+      failureRateDelta: 0.15,
+    },
     affectedNodeIds: ['razorpay-payments', 'checkout-flow', 'premium-bundle', 'revenue'],
     focusNodeId: 'razorpay-payments',
     hops: [

@@ -1,10 +1,34 @@
+import { useState, useEffect } from 'react'
 import { BrainCircuit } from 'lucide-react'
 import HiddenDependency from './HiddenDependency'
 import SimulationResult from './SimulationResult'
 import NodeObservation from './NodeObservation'
 import RiskPanel from '../dashboard/RiskPanel'
+import { cascadeRisk } from '../../data/businessData'
 
 export default function InsightPanel({ activeScenario, selectedNode, onViewDependency, onClearScenario }) {
+  const [selectedInterventionId, setSelectedInterventionId] = useState(null)
+
+  // Reset selected intervention whenever scenario changes
+  useEffect(() => {
+    setSelectedInterventionId(activeScenario?.simulation?.recommendation?.interventionId || null)
+  }, [activeScenario?.id])
+
+  const simulationRisk = activeScenario?.simulation?.cascadeRisk
+  const interventions = activeScenario?.simulation?.interventions || []
+
+  const activeIntervention =
+    interventions.find((i) => i.id === selectedInterventionId) ||
+    activeScenario?.simulation?.recommendation
+
+  const riskScore = activeIntervention?.residualSeverity !== undefined
+    ? activeIntervention.residualSeverity
+    : (simulationRisk?.score ?? cascadeRisk.score)
+
+  const riskLabel = activeIntervention
+    ? `Risk reduced from ${simulationRisk?.score || cascadeRisk.score} to ${activeIntervention.residualSeverity} via ${activeIntervention.name}`
+    : (simulationRisk?.label ?? cascadeRisk.label)
+
   return (
     <section className="panel rail-right">
       <div className="panel-header">
@@ -27,14 +51,23 @@ export default function InsightPanel({ activeScenario, selectedNode, onViewDepen
           </div>
 
           {activeScenario ? (
-            <SimulationResult scenario={activeScenario} onClear={onClearScenario} />
+            <SimulationResult
+              scenario={activeScenario}
+              onClear={onClearScenario}
+              selectedInterventionId={selectedInterventionId}
+              onSelectIntervention={setSelectedInterventionId}
+            />
           ) : selectedNode ? (
             <NodeObservation node={selectedNode} />
           ) : (
             <HiddenDependency onView={onViewDependency} />
           )}
 
-          <RiskPanel />
+          <RiskPanel
+            score={riskScore}
+            label={riskLabel}
+            steps={simulationRisk?.steps ?? cascadeRisk.steps}
+          />
         </div>
       </div>
     </section>

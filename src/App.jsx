@@ -5,6 +5,7 @@ import BusinessGraph from './components/twin/BusinessGraph'
 import InsightPanel from './components/intelligence/InsightPanel'
 import AskNexus from './components/intelligence/AskNexus'
 import { useBusinessGraph } from './hooks/useBusinessGraph'
+import { runSimulation } from './engine/simulationEngine'
 
 export default function App() {
   const graph = useBusinessGraph()
@@ -14,8 +15,23 @@ export default function App() {
   const handleScenarioSelect = useCallback(
     (scenario) => {
       setQuery(scenario.query)
-      setActiveScenario(scenario)
-      graph.applyScenarioHighlight(scenario.affectedNodeIds, scenario.focusNodeId, scenario.hops)
+      const simulation = runSimulation(scenario, {
+        nodes: graph.nodes,
+        edges: graph.edges,
+      })
+      const enrichedScenario = {
+        ...scenario,
+        simulation,
+        preview: simulation?.preview || scenario.preview,
+        affectedNodeIds: simulation?.affectedNodeIds || scenario.affectedNodeIds,
+        hops: scenario.hops || simulation?.hops,
+      }
+      setActiveScenario(enrichedScenario)
+      graph.applyScenarioHighlight(
+        enrichedScenario.affectedNodeIds,
+        enrichedScenario.focusNodeId || scenario.focusNodeId,
+        enrichedScenario.hops
+      )
     },
     [graph]
   )
