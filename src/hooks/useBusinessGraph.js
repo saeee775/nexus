@@ -131,8 +131,8 @@ export function useBusinessGraph() {
           color: isCritical ? 'var(--status-critical)' : 'var(--status-warning)',
           opacity: 1.0,
           strokeWidth: isCritical ? 3.4 : 2.5,
-          flowSpeed: isCritical ? '0.7s' : '1.3s',
-          courierSpeed: isCritical ? '1.0s' : '1.7s',
+          flowSpeed: isCritical ? '1.5s' : '2.2s',
+          courierSpeed: isCritical ? '1.8s' : '2.6s',
         })
         return
       }
@@ -144,19 +144,19 @@ export function useBusinessGraph() {
           isCritical: false,
           isProtected: true,
           color: '#62c98b',
-          opacity: 0.38,
-          strokeWidth: 1.4,
+          opacity: 0.42,
+          strokeWidth: 1.5,
         })
         return
       }
 
-      // Unrelated edges
+      // Unrelated edges stay subtly visible to keep the Digital Twin graph as the visual hero
       map.set(e.id, {
         isCorridorActive: false,
         isCritical: false,
         isProtected: false,
         color: '#5f6861',
-        opacity: 0.08,
+        opacity: 0.18,
         strokeWidth: null,
       })
     })
@@ -243,7 +243,7 @@ export function useBusinessGraph() {
       if (activeSimulation) {
         if (activeSimulation.affectedNodeIds?.includes(nodeId)) return 1.0
         if (activeSimulation.bufferProtectedNodeIds?.includes(nodeId)) return 0.92
-        return 0.22
+        return 0.48
       }
 
       if (scenarioHighlight) {

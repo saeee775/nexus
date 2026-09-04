@@ -305,7 +305,7 @@ export function runSimulation(disruptionOrScenario, options = {}) {
       const delayDays = elapsedDays
 
       if (n.type === NODE_TYPES.PRODUCT) {
-        const stockDays = n.metrics?.stockDaysLeft ?? 0
+        const stockDays = n.id === 'shared-inventory' ? productXStock : (n.metrics?.stockDaysLeft ?? 0)
         const deficit = delayDays - stockDays
         nodeDeficitDays = Math.max(0, deficit)
 
@@ -771,4 +771,110 @@ export function runSimulation(disruptionOrScenario, options = {}) {
 export function simulateScenarioAtTime(scenario, elapsedDays, options = {}) {
   return runSimulation(scenario, { ...options, currentDay: elapsedDays })
 }
+
+/**
+ * Dynamically computes the "Last Safe Moment" decision threshold for a disruption scenario.
+ * Evaluates the timeline days to find the latest point at which intervention action can
+ * prevent the disruption from breaching inventory buffers and escalating into downstream exposure.
+ *
+ * @param {object} params
+ * @param {object} params.scenario Scenario object
+ * @param {number} [params.currentDay] Current timeline scrub day
+ * @param {object[]} [params.nodes] Business nodes
+ * @param {object[]} [params.edges] Business edges
+ * @returns {object} Last safe moment decision insight
+ */
+export function computeLastSafeMoment({ scenario, currentDay, nodes = businessNodes, edges = businessEdges }) {
+  if (!scenario) {
+    return {
+      hasWindow: false,
+      message: 'Intervention timing unavailable for this scenario.',
+    }
+  }
+
+  const norm = normalizeDisruption(scenario, nodes)
+  if (!norm || !norm.nodeId) {
+    return {
+      hasWindow: false,
+      message: 'No safe intervention window identified.',
+    }
+  }
+
+  const totalDays = norm.type === 'supplier_delay'
+    ? (norm.delayDays ?? 10)
+    : norm.type === 'product_unavailable' ? 14 : norm.type === 'payment_failure' ? 14 : 10
+
+  const day = currentDay !== undefined ? Number(currentDay) : totalDays
+
+  // Baseline full disruption simulation to identify intervention targets
+  const fullSim = runSimulation(scenario, { currentDay: totalDays, nodes, edges })
+  const bestIntervention = fullSim?.recommendation || fullSim?.interventions?.[0]
+
+  let lastSafeDay = 0
+  let interventionDeadline = 'Day 0'
+  let estimatedExposureAvoidedRaw = bestIntervention?.revenueProtectedINR || fullSim?.estimatedRevenueExposure?.amount || 0
+  let estimatedExposureAvoided = formatCurrencyINR(estimatedExposureAvoidedRaw)
+  let protectedNodeCount = 0
+
+  if (norm.type === 'supplier_delay') {
+    const productX = getNode(nodes, 'product-x')
+    const stockCover = productX?.metrics?.stockDaysLeft ?? 6
+    lastSafeDay = stockCover
+    interventionDeadline = `Day ${lastSafeDay}`
+    // Downstream entities preserved if action is taken before buffer breach:
+    // Shared Inventory buffer allocation, Product X, Premium Bundle, VIP Customers, Revenue
+    protectedNodeCount = 4
+  } else if (norm.type === 'product_unavailable') {
+    lastSafeDay = 1
+    interventionDeadline = `Day ${lastSafeDay}`
+    protectedNodeCount = 3
+  } else if (norm.type === 'payment_failure') {
+    lastSafeDay = 1
+    interventionDeadline = `Day ${lastSafeDay}`
+    protectedNodeCount = 2
+  } else {
+    lastSafeDay = Math.max(1, Math.floor(totalDays * 0.3))
+    interventionDeadline = `Day ${lastSafeDay}`
+    protectedNodeCount = Math.max(1, (fullSim?.affectedNodeIds?.length || 2) - 1)
+  }
+
+  let status = 'before'
+  let statusLabel = 'Safe Window Active'
+  let explanation = 'You can still prevent the downstream cascade.'
+
+  if (day < lastSafeDay) {
+    status = 'before'
+    statusLabel = 'Safe Window Active'
+    explanation = 'You can still prevent the downstream cascade.'
+  } else if (day === lastSafeDay) {
+    status = 'at'
+    statusLabel = 'Deadline Reached'
+    explanation = 'This is the last modeled day to prevent major exposure.'
+  } else {
+    status = 'after'
+    statusLabel = 'Buffer Breached'
+    explanation = 'The buffer breach has occurred. Intervention now reduces damage but cannot fully prevent exposure.'
+  }
+
+  return {
+    hasWindow: true,
+    lastSafeDay,
+    interventionDeadline,
+    status,
+    statusLabel,
+    explanation,
+    modeledInterventionName: bestIntervention?.name || 'Modeled Intervention',
+    estimatedExposureAvoided,
+    estimatedExposureAvoidedRaw,
+    protectedNodeCount,
+    originalExposure: fullSim?.estimatedRevenueExposure?.formatted || '₹0',
+    modeledExposure: bestIntervention?.formattedRevenueExposureAfter || '₹0',
+    scenarioAssumptions: norm.type === 'supplier_delay'
+      ? `Modeled on ${lastSafeDay}-day Product X buffer cover and supplier lead-time dynamics.`
+      : norm.type === 'product_unavailable'
+      ? `Modeled on rapid catalog substitution within 24–48h window.`
+      : `Modeled on automated payment routing within 24h of signal drop.`,
+  }
+}
+
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Zap, X, ShieldCheck, Play, Pause, RotateCcw, Clock } from 'lucide-react'
-import { runSimulation } from '../../engine/simulationEngine'
+import { Zap, X, ShieldCheck, Play, Pause, RotateCcw, Clock, AlertTriangle } from 'lucide-react'
+import { runSimulation, computeLastSafeMoment } from '../../engine/simulationEngine'
 
 const CONFIDENCE_LABEL = {
   high: { text: 'High Confidence (Modeled)', color: 'var(--status-healthy)' },
@@ -76,9 +76,14 @@ export default function SimulationResult({
       mitigatedNodeIds = currentSim.affectedNodeIds.slice(0, 2)
     }
 
+    // Nodes saved by the intervention become protected
+    const savedNodeIds = (currentSim.affectedNodeIds || []).filter((id) => !mitigatedNodeIds.includes(id))
+    const updatedProtectedNodeIds = Array.from(new Set([...(currentSim.bufferProtectedNodeIds || []), ...savedNodeIds]))
+
     return {
       ...currentSim,
       affectedNodeIds: mitigatedNodeIds,
+      bufferProtectedNodeIds: updatedProtectedNodeIds,
       severity: {
         ...currentSim.severity,
         score: activeIntervention.residualSeverity ?? currentSim.severity.score,
@@ -93,8 +98,18 @@ export default function SimulationResult({
         formatted: activeIntervention.formattedRevenueExposureAfter,
         amount: activeIntervention.revenueExposureAfter,
       },
+      timeline: {
+        ...currentSim.timeline,
+        isBreached: false,
+        deficitDays: 0,
+      },
     }
   }, [currentSim, replayMode, activeIntervention])
+
+  // Last Safe Moment dynamically calculated across the scenario timeline
+  const lastSafeMoment = useMemo(() => {
+    return computeLastSafeMoment({ scenario, currentDay })
+  }, [scenario, currentDay])
 
   // Notify parent components so RiskPanel and Digital Twin graph highlight update in sync
   useEffect(() => {
@@ -137,22 +152,38 @@ export default function SimulationResult({
   const confidence = CONFIDENCE_LABEL[currentSim?.preview?.confidence] || CONFIDENCE_LABEL.medium
   const cohorts = currentSim?.affectedCustomerCohorts || []
 
-  // Compact Business Impact summary metrics
+  // Primary 3 Business Impact metrics
   const nodesExposedCount = effectiveSim?.affectedNodeIds?.length || 0
-  const bufferProtectedCount = currentSim?.bufferProtectedNodeIds?.length || 0
+  const bufferProtectedCount = effectiveSim?.bufferProtectedNodeIds?.length || currentSim?.bufferProtectedNodeIds?.length || 0
   const estimatedExposureStr = replayMode === 'intervention' && activeIntervention
     ? activeIntervention.formattedRevenueExposureAfter
     : (currentSim?.estimatedRevenueExposure?.formatted || '₹0')
   const currentRiskScore = replayMode === 'intervention' && activeIntervention
     ? activeIntervention.residualSeverity
     : (currentSim?.severity?.score || 0)
-  const baselineRiskScore = currentSim?.baseline?.severity || 20
-  const riskDelta = currentRiskScore - baselineRiskScore
 
   const timelineInfo = currentSim?.timeline || {}
   const isBufferBreached = timelineInfo.isBreached
   const bufferRemaining = timelineInfo.bufferRemainingDays ?? 0
   const deficitDays = timelineInfo.deficitDays ?? 0
+
+  // Single-sentence clear causal explanation that updates with timeline
+  const singleSentenceExplanation = useMemo(() => {
+    if (scenario.event?.type === 'supplier_delay' || scenario.id?.includes('delay')) {
+      const stockCover = timelineInfo.stockDays ?? 6
+      if (currentDay <= stockCover) {
+        return `Product X's ${stockCover}-day inventory buffer is actively absorbing the delay (${stockCover - currentDay}d remaining); downstream revenue and VIP customers remain protected.`
+      }
+      return `Product X's ${stockCover}-day inventory buffer was exhausted on Day ${stockCover}. The resulting stockout (${deficitDays}d deficit) propagated through Premium Bundle to VIP Customers and Revenue.`
+    }
+    if (scenario.event?.type === 'product_unavailable' || scenario.id?.includes('product')) {
+      return `Product X discontinuation immediately compromised Premium Bundle availability, exposing VIP customer revenue lines without an active substitute.`
+    }
+    if (scenario.event?.type === 'payment_failure' || scenario.id?.includes('payment')) {
+      return `A 15% payment success drop at the Razorpay gateway degraded checkout conversion, leaking transactions across bundle checkouts.`
+    }
+    return currentSim?.explanation?.headline || currentSim?.preview?.headline || 'Disruption is propagating across downstream dependencies.'
+  }, [scenario, currentDay, timelineInfo, deficitDays, currentSim])
 
   return (
     <div className="insight-block">
@@ -171,7 +202,7 @@ export default function SimulationResult({
         </button>
       </div>
 
-      {/* Shock Replay Timeline Scrubber */}
+      {/* Shock Replay Timeline Controls */}
       <div
         style={{
           background: 'rgba(255, 255, 255, 0.03)',
@@ -263,98 +294,158 @@ export default function SimulationResult({
 
         {/* Milestone labels */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 8.5, color: 'var(--text-tertiary)' }}>
-          <span>Day 0 (Initial shock)</span>
-          {totalDays === 10 && <span>Day 6 (Stock buffer breach)</span>}
-          <span>Day {totalDays} (Full duration)</span>
+          <span>Day 0 (Shock Start)</span>
+          {totalDays === 10 && <span>Day 6 (Buffer Exhaustion)</span>}
+          <span>Day {totalDays} (Full Impact)</span>
         </div>
+
+        {/* Compact LAST SAFE MOMENT Decision Insight Card */}
+        {lastSafeMoment?.hasWindow && (
+          <div
+            style={{
+              background: lastSafeMoment.status === 'after'
+                ? 'rgba(255, 92, 77, 0.08)'
+                : lastSafeMoment.status === 'at'
+                ? 'rgba(255, 179, 71, 0.10)'
+                : 'rgba(98, 201, 139, 0.08)',
+              border: `1px solid ${
+                lastSafeMoment.status === 'after'
+                  ? 'rgba(255, 92, 77, 0.35)'
+                  : lastSafeMoment.status === 'at'
+                  ? 'rgba(255, 179, 71, 0.40)'
+                  : 'rgba(98, 201, 139, 0.35)'
+              }`,
+              borderRadius: 'var(--r-sm)',
+              padding: '7px 9px',
+              marginTop: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <ShieldCheck size={11} color={lastSafeMoment.status === 'after' ? 'var(--status-critical)' : 'var(--status-healthy)'} />
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.07em',
+                    color: lastSafeMoment.status === 'after' ? 'var(--status-critical)' : 'var(--status-healthy)',
+                  }}
+                >
+                  LAST SAFE MOMENT
+                </span>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Act before {lastSafeMoment.interventionDeadline}
+                </span>
+              </div>
+              <span
+                style={{
+                  fontSize: 8.5,
+                  fontWeight: 600,
+                  padding: '1px 5px',
+                  borderRadius: 3,
+                  background: lastSafeMoment.status === 'after' ? 'var(--status-critical-soft)' : 'var(--status-healthy-soft)',
+                  color: lastSafeMoment.status === 'after' ? 'var(--status-critical)' : 'var(--status-healthy)',
+                }}
+              >
+                {lastSafeMoment.statusLabel}
+              </span>
+            </div>
+            <p style={{ fontSize: 10, color: 'var(--text-secondary)', margin: '3px 0 5px', lineHeight: 1.35 }}>
+              {lastSafeMoment.explanation}
+            </p>
+            <div style={{ display: 'flex', gap: 10, fontSize: 9, color: 'var(--text-tertiary)', borderTop: '1px dashed rgba(255,255,255,0.06)', paddingTop: 4, flexWrap: 'wrap' }}>
+              <span>Modeled intervention: <strong style={{ color: 'var(--text-secondary)' }}>{lastSafeMoment.modeledInterventionName}</strong></span>
+              <span>Est. exposure avoided: <strong style={{ color: 'var(--status-healthy)' }}>{lastSafeMoment.estimatedExposureAvoided}</strong></span>
+              <span>Protected nodes: <strong style={{ color: 'var(--text-secondary)' }}>{lastSafeMoment.protectedNodeCount}</strong></span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Compact Business Impact Summary (5 required metrics) */}
+      {/* Simplified Business Impact: THREE Primary Metrics */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: 5,
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 6,
           marginBottom: 10,
         }}
       >
-        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '5px 4px', textAlign: 'center' }}>
-          <div style={{ fontSize: 8, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Timeline</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-lime)', marginTop: 2 }}>Day {currentDay}/{totalDays}</div>
+        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-subtle)', borderRadius: 5, padding: '6px 5px', textAlign: 'center' }}>
+          <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estimated Exposure</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: estimatedExposureStr === '₹0' ? 'var(--status-healthy)' : 'var(--status-critical)', marginTop: 2 }}>
+            {estimatedExposureStr}
+          </div>
         </div>
-        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '5px 4px', textAlign: 'center' }}>
-          <div style={{ fontSize: 8, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Exposed</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>{nodesExposedCount} nodes</div>
-        </div>
-        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '5px 4px', textAlign: 'center' }}>
-          <div style={{ fontSize: 8, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Protected</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--status-healthy)', marginTop: 2 }}>{bufferProtectedCount} nodes</div>
-        </div>
-        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '5px 4px', textAlign: 'center' }}>
-          <div style={{ fontSize: 8, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Exposure</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--status-critical)', marginTop: 2 }}>{estimatedExposureStr}</div>
-        </div>
-        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '5px 4px', textAlign: 'center' }}>
-          <div style={{ fontSize: 8, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Risk Score</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: currentRiskScore >= 60 ? 'var(--status-critical)' : 'var(--status-warning)', marginTop: 2 }}>
+        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-subtle)', borderRadius: 5, padding: '6px 5px', textAlign: 'center' }}>
+          <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Risk Score</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: currentRiskScore >= 60 ? 'var(--status-critical)' : currentRiskScore >= 35 ? 'var(--status-warning)' : 'var(--status-healthy)', marginTop: 2 }}>
             {currentRiskScore}/100
+          </div>
+        </div>
+        <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-subtle)', borderRadius: 5, padding: '6px 5px', textAlign: 'center' }}>
+          <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nodes Exposed</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+            {nodesExposedCount} nodes
           </div>
         </div>
       </div>
 
-      {/* Dynamic Headline & Summary */}
-      <p className="insight-text">
-        <strong>{currentSim?.preview?.headline}</strong>
-      </p>
-
-      {/* Dynamic "Why this happened" Causal Explanation Section */}
+      {/* Simplified "Why this happened" (One clear sentence updating with timeline) */}
       <div
         style={{
           background: 'rgba(0, 0, 0, 0.22)',
           border: '1px solid var(--border-subtle)',
           borderRadius: 'var(--r-sm)',
           padding: '8px 10px',
-          marginTop: 8,
           marginBottom: 10,
         }}
       >
-        <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-primary)', marginBottom: 5 }}>
-          Why this happened (Causal Mechanics)
+        <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-primary)', marginBottom: 4 }}>
+          Why this happened
         </div>
-        <p style={{ fontSize: 10.5, color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0 }}>
-          {currentSim?.preview?.causalExplanation || currentSim?.preview?.body}
+        <p style={{ fontSize: 10.5, color: 'var(--text-primary)', lineHeight: 1.45, margin: 0, fontWeight: 500 }}>
+          {singleSentenceExplanation}
         </p>
 
-        {/* Key Causal Attributes */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 5, fontSize: 10, color: 'var(--text-secondary)', marginTop: 7, paddingTop: 6, borderTop: '1px dashed rgba(255,255,255,0.07)' }}>
-          <div>
-            <span style={{ color: 'var(--text-tertiary)' }}>Disruption timeline: </span>
-            <strong style={{ color: 'var(--text-primary)' }}>Day {currentDay} of {totalDays}</strong>
+        {/* Compact Expandable Drawer for Secondary Causal Mechanics & Assumptions */}
+        <details style={{ marginTop: 6, fontSize: 9.5, color: 'var(--text-tertiary)', borderTop: '1px dashed rgba(255,255,255,0.06)', paddingTop: 5 }}>
+          <summary style={{ cursor: 'pointer', color: 'var(--accent-lime)', userSelect: 'none', fontWeight: 600 }}>
+            View Causal Mechanics & Assumptions ▾
+          </summary>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 5, marginTop: 6, color: 'var(--text-secondary)' }}>
+            <div>
+              <span style={{ color: 'var(--text-tertiary)' }}>Stock buffer cover: </span>
+              <strong style={{ color: 'var(--text-primary)' }}>{timelineInfo.stockDays ?? 6}d</strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-tertiary)' }}>Stockout deficit: </span>
+              <strong style={{ color: deficitDays > 0 ? 'var(--status-critical)' : 'var(--status-healthy)' }}>
+                {deficitDays > 0 ? `${deficitDays}d deficit` : '0d (absorbed)'}
+              </strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-tertiary)' }}>Protected nodes: </span>
+              <strong style={{ color: 'var(--status-healthy)' }}>{bufferProtectedCount} nodes</strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-tertiary)' }}>VIP cohort share: </span>
+              <strong style={{ color: 'var(--text-primary)' }}>{cohorts[0]?.revenueShare ?? 42}%</strong>
+            </div>
           </div>
-          <div>
-            <span style={{ color: 'var(--text-tertiary)' }}>Stock buffer cover: </span>
-            <strong style={{ color: 'var(--text-primary)' }}>{timelineInfo.stockDays ?? 6}d</strong>
-          </div>
-          <div>
-            <span style={{ color: 'var(--text-tertiary)' }}>Stockout deficit: </span>
-            <strong style={{ color: deficitDays > 0 ? 'var(--status-critical)' : 'var(--status-healthy)' }}>
-              {deficitDays > 0 ? `${deficitDays} days` : '0 days (absorbed)'}
+          <div style={{ marginTop: 5, fontSize: 9, color: 'var(--text-tertiary)' }}>
+            <span>Propagation path: </span>
+            <strong style={{ color: 'var(--text-secondary)' }}>
+              {effectiveSim?.affectedNodeIds?.slice(0, 6).join(' → ')}
             </strong>
           </div>
-          <div>
-            <span style={{ color: 'var(--text-tertiary)' }}>VIP cohort share: </span>
-            <strong style={{ color: 'var(--text-primary)' }}>{cohorts[0]?.revenueShare ?? 42}%</strong>
-          </div>
-        </div>
-
-        {/* Dynamic Propagation Corridor */}
-        <div style={{ marginTop: 6, paddingTop: 5, borderTop: '1px dashed rgba(255,255,255,0.07)', fontSize: 9.5, color: 'var(--text-tertiary)' }}>
-          <span>Corridor: </span>
-          <span style={{ color: 'var(--text-secondary)' }}>
-            {effectiveSim?.affectedNodeIds?.slice(0, 5).join(' → ')}
-            {effectiveSim?.affectedNodeIds?.length > 5 ? ` → +${effectiveSim.affectedNodeIds.length - 5} more` : ''}
-          </span>
-        </div>
+          {lastSafeMoment?.scenarioAssumptions && (
+            <div style={{ marginTop: 4, fontSize: 8.5, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+              {lastSafeMoment.scenarioAssumptions}
+            </div>
+          )}
+        </details>
       </div>
 
       {/* Customer Cohorts if affected */}
@@ -428,7 +519,7 @@ export default function SimulationResult({
                 textAlign: 'center',
               }}
             >
-              Modeled Outcome ({activeIntervention?.formattedRevenueExposureAfter || 'Mitigated'})
+              Modeled Intervention Outcome ({activeIntervention?.formattedRevenueExposureAfter || 'Mitigated'})
             </button>
           </div>
 

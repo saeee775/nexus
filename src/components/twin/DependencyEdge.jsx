@@ -83,15 +83,37 @@ export default function DependencyEdge({
 
   const strokeW = simEdgeState?.strokeWidth || (isTraveling || isCascadeActive ? restingWidth + 1.1 : isHighlighted ? restingWidth + 0.4 : restingWidth)
 
+  const isProtectedEdge = Boolean(simEdgeState?.isProtected)
+
+  // Under active corridor, the base path serves as a subtle translucent conduit track
+  // so the animated glowing signal pulses on top have high contrast and visibly flow.
+  const basePathStroke = isCorridorActive
+    ? isCriticalCorridor
+      ? 'rgba(255, 92, 77, 0.22)'
+      : 'rgba(255, 179, 71, 0.22)'
+    : color
+
   return (
     <g className="dep-edge-group" opacity={opacity} style={{ transition: 'opacity 0.45s ease' }}>
+      {/* Soft atmospheric conduit halo for active corridor */}
+      {isCorridorActive && (
+        <path
+          d={curve.d}
+          stroke={isCriticalCorridor ? 'rgba(255, 92, 77, 0.12)' : 'rgba(255, 179, 71, 0.10)'}
+          strokeWidth={strokeW + 2.8}
+          fill="none"
+          strokeLinecap="round"
+        />
+      )}
+
+      {/* Base dependency track */}
       <path
         id={pathId}
         className={`dep-edge ${isHiddenEdge ? 'hidden-dep' : ''} ${hiddenRevealed ? 'hidden-revealed' : ''}`}
         d={curve.d}
-        stroke={color}
+        stroke={basePathStroke}
         fill="none"
-        strokeWidth={strokeW}
+        strokeWidth={isCorridorActive ? Math.max(1.8, strokeW - 0.4) : strokeW}
         strokeLinecap="round"
         strokeDasharray={isDashed ? '4 6' : hiddenRevealed ? undefined : isHiddenEdge ? '3 10' : undefined}
         style={{
@@ -99,32 +121,44 @@ export default function DependencyEdge({
         }}
       />
 
-      {/* Animated streaming dash flow along the active corridor path */}
+      {/* Animated streaming signal flow along the active corridor path (strictly downstream) */}
       {isCorridorActive && (
         <path
           d={curve.d}
           stroke={color}
           fill="none"
           strokeWidth={strokeW + 0.6}
-          strokeDasharray={isCriticalCorridor ? '8 6' : '5 7'}
+          strokeDasharray={isCriticalCorridor ? '14 18' : '10 16'}
           strokeLinecap="round"
-          opacity={0.9}
+          opacity={0.96}
         >
           <animate
             attributeName="stroke-dashoffset"
-            from={isCriticalCorridor ? '28' : '24'}
+            from={isCriticalCorridor ? '32' : '26'}
             to="0"
-            dur={simEdgeState?.flowSpeed || (isCriticalCorridor ? '0.7s' : '1.3s')}
+            dur={simEdgeState?.flowSpeed || (isCriticalCorridor ? '1.5s' : '2.2s')}
             repeatCount="indefinite"
           />
         </path>
       )}
 
-      {/* Active traveling courier particle along the corridor */}
+      {/* Active traveling courier beacon along the corridor (upstream to downstream) */}
       {isCorridorActive && !reducedMotion && (
-        <circle r={isCriticalCorridor ? 3.4 : 2.5} fill={color} opacity={0.95} className="cascade-courier">
+        <circle
+          r={isCriticalCorridor ? 3.4 : 2.6}
+          fill="#ffffff"
+          stroke={color}
+          strokeWidth={1.8}
+          opacity={0.98}
+          className="cascade-courier"
+          style={{
+            filter: isCriticalCorridor
+              ? 'drop-shadow(0 0 5px rgba(255, 92, 77, 0.95))'
+              : 'drop-shadow(0 0 4px rgba(255, 179, 71, 0.85))',
+          }}
+        >
           <animateMotion
-            dur={simEdgeState?.courierSpeed || (isCriticalCorridor ? '1.0s' : '1.7s')}
+            dur={simEdgeState?.courierSpeed || (isCriticalCorridor ? '1.8s' : '2.6s')}
             repeatCount="indefinite"
             keyPoints="0;1"
             keyTimes="0;1"
