@@ -138,13 +138,14 @@ export default function SimulationResult({
                       letterSpacing: '0.05em',
                     }}
                   >
-                    {activeIntervention.recommended ? 'BEST RECOMMENDED ACTION' : 'COUNTERFACTUAL OPTION'}
+                    {activeIntervention.recommended ? 'RECOMMENDED MODELED ACTION' : 'COUNTERFACTUAL OPTION'}
                   </span>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
                     {activeIntervention.name}
                   </div>
                 </div>
                 <span
+                  title="Modeled revenue protected"
                   style={{
                     fontSize: 10,
                     fontWeight: 700,
@@ -177,7 +178,7 @@ export default function SimulationResult({
                 }}
               >
                 <div>
-                  <span style={{ color: 'var(--text-tertiary)' }}>Residual exposure: </span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Estimated residual exposure: </span>
                   <strong style={{ color: 'var(--status-warning)' }}>
                     {activeIntervention.formattedRevenueExposureAfter}
                   </strong>
@@ -193,6 +194,13 @@ export default function SimulationResult({
               <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 4 }}>
                 <strong>Tradeoff:</strong> {activeIntervention.tradeoff}
               </div>
+
+              {activeIntervention.assumptions?.length > 0 && (
+                <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 5, lineHeight: 1.4 }}>
+                  <strong style={{ color: 'var(--text-secondary)' }}>Scenario assumptions: </strong>
+                  {activeIntervention.assumptions.join(' • ')}
+                </div>
+              )}
             </div>
           )}
         </div>

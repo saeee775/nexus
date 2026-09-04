@@ -34,7 +34,7 @@ export const scenarios = [
       headline: 'Supplier A delay → cascading exposure',
       body:
         'A 10-day delay drains Product X stock within 6 days, disrupting Premium Bundle availability for the VIP cohort.',
-      impact: '₹2L revenue at risk',
+      impact: '₹2L estimated revenue exposure',
       confidence: 'high',
     },
   },
@@ -90,7 +90,7 @@ export const scenarios = [
       headline: 'Payment friction → checkout leakage',
       body:
         'A 15% drop in Razorpay payment success rate increases checkout abandonment on Premium Bundle purchases.',
-      impact: '~₹1.4L monthly leakage',
+      impact: '~₹1.4L estimated revenue exposure',
       confidence: 'medium',
     },
   },
